@@ -17,7 +17,7 @@ The mass curve P(u < tol) vs tol shows:
 - For boundary pileup: sharp initial rise then slower growth (elbow indicates pileup region)
 
 Why Elbow Detection?
--------------------
+--------------------
 The elbow point indicates where "stuck" samples end and "natural" samples begin.
 If no elbow is found, there's no boundary pileup - the distribution is uniform
 near the boundary.

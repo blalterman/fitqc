@@ -44,11 +44,12 @@ autodoc_default_options = {
 }
 
 autodoc_member_order = "bysource"
-autodoc_typehints = "description"
+autodoc_typehints = "signature"
+autodoc_class_content = "class"  # Only show class docstring, not __init__
 
 # -- Options for autosummary -------------------------------------------------
 
-autosummary_generate = True
+autosummary_generate = True  # Auto-generate stub files for modules
 
 # -- Options for napoleon ----------------------------------------------------
 

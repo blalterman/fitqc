@@ -6,24 +6,24 @@ This package provides tools to detect two types of optimizer stickiness in fitte
 
 Quick Start
 -----------
-```python
-from fitqc import run_qc, QCSpec
+::
 
-# Define your parameter specification
-spec = QCSpec(
-    param_names=["alpha", "beta"],
-    x0={"alpha": 1.0, "beta": 2.0},
-    bounds={"alpha": (0.0, 10.0), "beta": (-5.0, 5.0)},
-)
+    from fitqc import run_qc, QCSpec
 
-# Run QC on your fitted samples
-params = {"alpha": alpha_samples, "beta": beta_samples}
-report, masks = run_qc(params, spec)
+    # Define your parameter specification
+    spec = QCSpec(
+        param_names=["alpha", "beta"],
+        x0={"alpha": 1.0, "beta": 2.0},
+        bounds={"alpha": (0.0, 10.0), "beta": (-5.0, 5.0)},
+    )
 
-# Filter to good samples
-combined_mask = masks["alpha"] & masks["beta"]
-clean_alpha = params["alpha"][combined_mask]
-```
+    # Run QC on your fitted samples
+    params = {"alpha": alpha_samples, "beta": beta_samples}
+    report, masks = run_qc(params, spec)
+
+    # Filter to good samples
+    combined_mask = masks["alpha"] & masks["beta"]
+    clean_alpha = params["alpha"][combined_mask]
 
 Modules
 -------

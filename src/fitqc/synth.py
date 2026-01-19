@@ -27,15 +27,15 @@ Generator Types
 
 Usage
 -----
-```python
-from fitqc.synth import generate_normal, generate_with_x0_spike
+::
 
-# Clean data - should not trigger QC
-clean = generate_normal(n=10000, loc=5.0, scale=2.0, seed=42)
+    from fitqc.synth import generate_normal, generate_with_x0_spike
 
-# Data with x0 stickiness - should trigger interior QC
-sticky = generate_with_x0_spike(n=10000, x0=5.0, spike_frac=0.05, seed=42)
-```
+    # Clean data - should not trigger QC
+    clean = generate_normal(n=10000, loc=5.0, scale=2.0, seed=42)
+
+    # Data with x0 stickiness - should trigger interior QC
+    sticky = generate_with_x0_spike(n=10000, x0=5.0, spike_frac=0.05, seed=42)
 """
 
 import numpy as np

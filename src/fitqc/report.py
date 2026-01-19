@@ -55,10 +55,11 @@ class NumpyEncoder(json.JSONEncoder):
     This encoder converts them to Python-native types that JSON understands.
 
     Conversions:
-    - np.ndarray -> list (recursive, handles nested arrays)
-    - np.floating (float32, float64, etc.) -> Python float
-    - np.integer (int32, int64, etc.) -> Python int
-    - np.bool_ -> Python bool
+
+    - ``np.ndarray`` -> list (recursive, handles nested arrays)
+    - ``np.floating`` (float32, float64, etc.) -> Python float
+    - ``np.integer`` (int32, int64, etc.) -> Python int
+    - ``np.bool_`` -> Python bool
 
     Usage:
         json.dumps(data, cls=NumpyEncoder)
@@ -85,40 +86,32 @@ class QCReport:
     fit. It provides methods to convert to dictionary and JSON for storage
     and downstream analysis.
 
-    Attributes
-    ----------
-    interior_results : dict[str, InteriorResult]
-        Results of x0 stickiness analysis for each parameter.
-        Keys are parameter names from spec.param_names.
-
-    boundary_results : dict[str, BoundaryResult]
-        Results of boundary pileup analysis for each parameter.
-        Keys are parameter names from spec.param_names.
-
-    spec : QCSpec
-        The specification used for this QC run, containing param_names,
-        x0 values, and bounds. Stored for reproducibility.
-
     Example
     -------
-    ```python
-    report, masks = run_qc(params, spec, ...)
+    ::
 
-    # Check if any parameter has issues
-    for name in spec.param_names:
-        if report.interior_results[name].spike_detected:
-            print(f"{name}: x0 stickiness detected!")
-        if report.boundary_results[name].lower_pileup_detected:
-            print(f"{name}: lower bound pileup detected!")
+        report, masks = run_qc(params, spec, ...)
 
-    # Save to JSON
-    with open("qc_report.json", "w") as f:
-        f.write(report.to_json())
-    ```
+        # Check if any parameter has issues
+        for name in spec.param_names:
+            if report.interior_results[name].spike_detected:
+                print(f"{name}: x0 stickiness detected!")
+            if report.boundary_results[name].lower_pileup_detected:
+                print(f"{name}: lower bound pileup detected!")
+
+        # Save to JSON
+        with open("qc_report.json", "w") as f:
+            f.write(report.to_json())
     """
 
+    #: Results of x0 stickiness analysis for each parameter.
+    #: Keys are parameter names from spec.param_names.
     interior_results: dict[str, InteriorResult]
+    #: Results of boundary pileup analysis for each parameter.
+    #: Keys are parameter names from spec.param_names.
     boundary_results: dict[str, BoundaryResult]
+    #: The specification used for this QC run, containing param_names,
+    #: x0 values, and bounds. Stored for reproducibility.
     spec: QCSpec
 
     def to_dict(self) -> dict[str, Any]:
@@ -189,7 +182,7 @@ def run_qc(
 
     Returns
     -------
-    tuple[QCReport, dict[str, NDArray[np.bool_]]]
+    ``tuple[QCReport, dict[str, NDArray[np.bool_]]]``
         - QCReport: Aggregated results for all parameters
         - masks: Dictionary mapping parameter names to boolean arrays.
           True = "good" sample (not stuck at x0 or boundary).
@@ -197,21 +190,21 @@ def run_qc(
 
     Example
     -------
-    ```python
-    spec = QCSpec(
-        param_names=["alpha", "beta"],
-        x0={"alpha": 1.0, "beta": 2.0},
-        bounds={"alpha": (0.0, 10.0), "beta": (-5.0, 5.0)},
-    )
-    params = {"alpha": alpha_samples, "beta": beta_samples}
+    ::
 
-    report, masks = run_qc(params, spec, None, None, None)
+        spec = QCSpec(
+            param_names=["alpha", "beta"],
+            x0={"alpha": 1.0, "beta": 2.0},
+            bounds={"alpha": (0.0, 10.0), "beta": (-5.0, 5.0)},
+        )
+        params = {"alpha": alpha_samples, "beta": beta_samples}
 
-    # Filter to good samples only
-    combined_mask = masks["alpha"] & masks["beta"]
-    good_alpha = params["alpha"][combined_mask]
-    good_beta = params["beta"][combined_mask]
-    ```
+        report, masks = run_qc(params, spec, None, None, None)
+
+        # Filter to good samples only
+        combined_mask = masks["alpha"] & masks["beta"]
+        good_alpha = params["alpha"][combined_mask]
+        good_beta = params["beta"][combined_mask]
     """
     # Use default configs if not provided
     if interior_config is None:
@@ -299,7 +292,7 @@ def _build_mask(
 
     Returns
     -------
-    NDArray[np.bool_]
+    ``NDArray[np.bool_]``
         Boolean mask where True = good sample, False = stuck sample.
     """
     n = len(x)
