@@ -179,9 +179,14 @@ def run_interior_qc(
         hist_padded,
         prominence=config.spike_prominence_min,
     )
-    # Adjust indices back to original histogram
+    # Convert peak indices from padded array back to original histogram indices.
+    # The padding added one element at the start, so padded_index = original_index + 1.
+    # Therefore: original_index = padded_index - 1.
     peaks = peaks - 1
-    # Filter out invalid indices
+
+    # After subtracting 1, peaks that were at padded index 0 become -1 (invalid).
+    # This shouldn't happen since we padded with zeros (no peak there), but we
+    # filter defensively to avoid index errors.
     peaks = peaks[(peaks >= 0) & (peaks < len(hist_counts))]
 
     # Step 5: Check spike criteria
