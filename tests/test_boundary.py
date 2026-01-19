@@ -315,3 +315,76 @@ class TestBoundaryQC:
         assert result.upper_pileup_detected is True
         assert result.t_hi_star is not None
         assert result.t_hi_star > 0.005
+
+    def test_boundary_qc_no_false_positive_signed_lognormal(self):
+        """Test that signed log-normal does NOT trigger false boundary pileup.
+
+        Why this test exists (critical edge case):
+        - Signed log-normal naturally concentrates mass near ZERO (not at bounds)
+        - With bounds like [-100, 100], the mass near 0 is INTERIOR, not boundary
+        - The distribution has very thin tails at the actual bounds (far from 0)
+        - We must NOT confuse the natural mass near 0 with boundary pileup
+
+        This is different from regular log-normal:
+        - Regular log-normal: mass near 0 IS near the lower bound (since L >= 0)
+        - Signed log-normal: mass near 0 is far from both bounds [-100, 100]
+
+        Scenario: Signed log-normal with bounds [-100, 100].
+        Most mass is near 0; very little near -100 or +100.
+        """
+        from fitqc.synth import generate_signed_lognormal
+
+        x = generate_signed_lognormal(n=10000, mu=0, sigma=1, sign_prob=0.5, seed=42)
+
+        result = run_boundary_qc(x, L=-100.0, U=100.0, config=BoundaryConfig())
+
+        # Signed log-normal should NOT detect boundary pileup
+        # The natural mass is near 0, which is interior, not at bounds
+        if result.t_lo_star is not None:
+            assert result.t_lo_star < 0.01, "False positive at lower boundary for signed log-normal"
+        if result.t_hi_star is not None:
+            assert result.t_hi_star < 0.01, "False positive at upper boundary for signed log-normal"
+
+    def test_boundary_qc_detects_lower_pileup_with_signed_lognormal_base(self):
+        """Test pileup detection at LOWER bound with signed log-normal base.
+
+        Why this test exists:
+        - Signed log-normal has very thin tails at the actual bounds
+        - Artificial pileup at L=-100 should be easy to detect (stands out)
+        - Confirms detection works even with this unusual distribution shape
+
+        Scenario: Signed log-normal base with 5% pileup at L=-100.
+        """
+        from fitqc.synth import generate_signed_lognormal
+
+        x = generate_signed_lognormal(n=10000, mu=0, sigma=1, sign_prob=0.5, seed=42)
+        # Inject 5% pileup at lower boundary (near L=-100)
+        x[:500] = np.random.default_rng(42).uniform(-100, -99, size=500)
+
+        result = run_boundary_qc(x, L=-100.0, U=100.0, config=BoundaryConfig())
+
+        assert result.lower_pileup_detected is True
+        assert result.t_lo_star is not None
+        assert result.t_lo_star > 0.003
+
+    def test_boundary_qc_detects_upper_pileup_with_signed_lognormal_base(self):
+        """Test pileup detection at UPPER bound with signed log-normal base.
+
+        Why this test exists:
+        - Mirrors lower bound test for completeness
+        - Signed log-normal is symmetric around 0, so upper should behave like lower
+        - Documents that both boundaries work with this edge-case distribution
+
+        Scenario: Signed log-normal base with 5% pileup at U=+100.
+        """
+        from fitqc.synth import generate_signed_lognormal
+
+        x = generate_signed_lognormal(n=10000, mu=0, sigma=1, sign_prob=0.5, seed=42)
+        # Inject 5% pileup at upper boundary (near U=+100)
+        x[:500] = np.random.default_rng(42).uniform(99, 100, size=500)
+
+        result = run_boundary_qc(x, L=-100.0, U=100.0, config=BoundaryConfig())
+
+        assert result.upper_pileup_detected is True
+        assert result.t_hi_star is not None
+        assert result.t_hi_star > 0.003
