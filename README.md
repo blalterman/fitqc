@@ -1,5 +1,10 @@
 # fitqc
 
+[![CI](https://github.com/blalterman/fitqc/actions/workflows/ci.yml/badge.svg)](https://github.com/blalterman/fitqc/actions/workflows/ci.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%20|%203.12%20|%203.13-blue.svg)](https://www.python.org/downloads/)
+[![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-green.svg)](LICENSE)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://docs.astral.sh/ruff/)
+
 Fit QC diagnostics for detecting optimizer stickiness in fitted parameters.
 
 ## Overview
