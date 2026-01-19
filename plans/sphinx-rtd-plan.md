@@ -1,63 +1,41 @@
 # Sphinx + RTD Documentation Plan
 
-## Summary
-Create Sphinx documentation for fitqc hosted on Read the Docs.
+Human reference document for the Sphinx/RTD setup. AI executes from `prompts/sphinx-rtd-setup.md`.
 
-## Analysis of Original Prompt
+## Decisions & Rationale
 
-### Improvements Made
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Source format | reStructuredText | Repo has no markdown narrative docs; rST is Sphinx native |
+| API generation | autodoc + autosummary | Standard, well-supported, generates from docstrings |
+| Dependency location | pyproject.toml `[docs]` extra | Consistent with existing `[dev]` extra; single source of truth |
+| Python for RTD | 3.13 | Highest supported version |
+| Theme | sphinx_rtd_theme | RTD standard, well-maintained |
+| Landing page content | Source from README.md | Avoids duplicating 162 lines of existing content |
 
-| Change | Rationale |
-|--------|-----------|
-| Removed role-playing preamble | Claude Code already knows its context |
-| Added concrete file references | Grounds task in actual repo state |
-| Made decisions explicit (rST, autodoc, pyproject `[docs]` extra) | Original "decide but use default" pattern was contradictory |
-| Removed speculative import mitigation strategies | fitqc has no optional deps that would trigger issues |
-| Added README.md as content source | Avoids duplicating 162 lines of existing quality content |
-| Added single commit instruction | Cleaner for review |
-| Added feature branch instruction | Prevents accidental main push |
-| Kept RTD config details | RTD YAML is error-prone; explicit guidance helps |
-| Kept extension list | Clear spec prevents ambiguity |
-
-### Decisions
-
-1. **Source format:** reStructuredText (repo has no markdown narrative docs)
-2. **API generation:** autodoc + autosummary (standard, well-supported)
-3. **Dependency location:** pyproject.toml `[docs]` extra (consistent with existing `[dev]` extra)
-4. **Python version for RTD:** 3.13 (highest supported)
-5. **Theme:** sphinx_rtd_theme (RTD standard)
-
-## Expected Deliverables
+## Expected Output
 
 ```
 docs/
 ├── conf.py
-├── index.rst
-├── installation.rst
-├── quickstart.rst
+├── index.rst           # Landing page (description, install, quickstart)
 ├── api/
-│   └── index.rst (autosummary toctree)
-├── developer.rst
+│   └── index.rst       # autosummary toctree
+├── developer.rst       # Project layout, tests, building docs
 ├── Makefile
 └── make.bat
-.readthedocs.yaml
-pyproject.toml (add [docs] extra)
+.readthedocs.yaml       # RTD v2 config
+pyproject.toml          # (modified: add [docs] extra)
+README.md               # (modified: add RTD badge)
 ```
 
-## Verification Checklist
+## PR Review Checklist
 
 - [ ] `pip install -e ".[docs]"` succeeds
-- [ ] `python -m sphinx -b html docs docs/_build/html` succeeds
-- [ ] `.readthedocs.yaml` exists and uses config v2
-- [ ] API reference renders public modules/classes
+- [ ] `python -m sphinx -b html docs docs/_build/html` succeeds without errors
+- [ ] `.readthedocs.yaml` exists and uses config version 2
+- [ ] API reference renders public modules/classes (not private/internal)
 - [ ] Landing page includes description, installation, quickstart
-- [ ] Developer section documents: layout, tests, local docs build
-
-## RTD Setup Steps (post-merge)
-
-1. Go to readthedocs.io → Import a Project
-2. Connect GitHub repo: blalterman/fitqc
-3. RTD auto-detects `.readthedocs.yaml`
-4. Trigger first build
-5. Verify build succeeds
-6. (Optional) Configure custom domain, PR builds, etc.
+- [ ] Developer section documents: project layout, running tests, building docs locally
+- [ ] RTD badge added to README.md
+- [ ] Single commit with conventional format
