@@ -10,7 +10,7 @@ readme = "README.md"
 license = "BSD-3-Clause"
 requires-python = ">=3.11"
 authors = [
-    { name = "Brian Alterman" },
+    { name = "B. L. Alterman" },
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
