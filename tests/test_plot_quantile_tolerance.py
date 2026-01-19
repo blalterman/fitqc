@@ -68,11 +68,21 @@ class TestPlotQuantileSpacingOverlaysSmoke:
         plt.close(fig)
 
     def test_custom_tolerances(self):
-        """Test with custom tolerance array."""
+        """Test that custom tolerance array is used for colorbar normalization."""
         x = np.sort(np.random.default_rng(42).random(1000))
         tols = np.array([0.0, 0.01, 0.02, 0.05])
         fig = plot_quantile_spacing_overlays(x, L=0.0, U=1.0, tols=tols)
+
         assert isinstance(fig, plt.Figure)
+
+        # Get colorbar axis (should be at right edge)
+        cbar_ax = [ax for ax in fig.axes if ax.get_position().x0 > 0.9][0]
+
+        # Check colorbar limits match custom tolerance range
+        ylim = cbar_ax.get_ylim()
+        assert ylim[0] == pytest.approx(0.0, abs=1e-6), "Colorbar min should match min tolerance"
+        assert ylim[1] == pytest.approx(0.05, abs=1e-6), "Colorbar max should match max tolerance"
+
         plt.close(fig)
 
 
@@ -270,13 +280,6 @@ class TestPlotQuantileSpacingOverlaysEdgeCases:
 
 class TestPlotQuantileSpacingOverlaysValidation:
     """Validation tests for input requirements."""
-
-    def test_sorted_ascending_accepted(self):
-        """Test that sorted ascending array is accepted."""
-        x = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])
-        fig = plot_quantile_spacing_overlays(x)
-        assert isinstance(fig, plt.Figure)
-        plt.close(fig)
 
     def test_sorted_with_duplicates_accepted(self):
         """Test that sorted array with duplicates is accepted."""

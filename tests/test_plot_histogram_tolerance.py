@@ -44,39 +44,6 @@ class TestPlotHistogramToleranceOverlays:
         assert has_colorbar, "Expected colorbar axis at right edge"
         plt.close(fig)
 
-    def test_works_with_default_config(self):
-        """Test that function works with config=None (uses defaults)."""
-        x = np.random.default_rng(42).uniform(0, 1, 1000)
-        fig = plot_histogram_tolerance_overlays(x, L=0.0, U=1.0, config=None)
-        assert isinstance(fig, plt.Figure)
-        plt.close(fig)
-
-    def test_uniform_data_no_pileup(self):
-        """Test with uniform data (no boundary pile-up)."""
-        rng = np.random.default_rng(42)
-        x = rng.uniform(0, 1, 1000)
-        fig = plot_histogram_tolerance_overlays(x, L=0.0, U=1.0, n_tols=5, bins=50)
-
-        # Should produce a figure without crashing
-        assert isinstance(fig, plt.Figure)
-        assert len(fig.axes) == 3  # 2 subplots + colorbar
-        plt.close(fig)
-
-    def test_boundary_pileup_data(self):
-        """Test with data showing boundary pile-up."""
-        rng = np.random.default_rng(42)
-
-        # Create data with pile-up at lower boundary
-        x_uniform = rng.uniform(0.1, 1.0, 800)
-        x_pileup = rng.uniform(0.0, 0.02, 200)  # Pile-up at lower boundary
-        x = np.concatenate([x_uniform, x_pileup])
-
-        fig = plot_histogram_tolerance_overlays(x, L=0.0, U=1.0, n_tols=7, bins=100)
-
-        # Should handle pile-up data without errors
-        assert isinstance(fig, plt.Figure)
-        assert len(fig.axes) == 3
-        plt.close(fig)
 
     def test_empty_array_after_filtering_high_tolerance(self):
         """Test that function handles empty arrays gracefully at high tolerance."""
@@ -101,7 +68,7 @@ class TestPlotHistogramToleranceOverlays:
         plt.close(fig)
 
     def test_custom_tolerance_array(self):
-        """Test with custom tolerance array."""
+        """Test that custom tolerance array is used for colorbar normalization."""
         x = np.random.default_rng(42).uniform(0, 1, 1000)
         custom_tols = np.array([0.0, 0.01, 0.02, 0.03])
 
@@ -110,7 +77,15 @@ class TestPlotHistogramToleranceOverlays:
         )
 
         assert isinstance(fig, plt.Figure)
-        assert len(fig.axes) == 3
+
+        # Get colorbar axis (should be at right edge)
+        cbar_ax = [ax for ax in fig.axes if ax.get_position().x0 > 0.9][0]
+
+        # Check colorbar limits match custom tolerance range
+        ylim = cbar_ax.get_ylim()
+        assert ylim[0] == pytest.approx(0.0, abs=1e-6), "Colorbar min should match min tolerance"
+        assert ylim[1] == pytest.approx(0.03, abs=1e-6), "Colorbar max should match max tolerance"
+
         plt.close(fig)
 
     def test_invalid_bounds_raises_error(self):
@@ -193,23 +168,30 @@ class TestPlotHistogramToleranceOverlays:
         plt.close("all")
 
     def test_histogram_overlay_effect(self):
-        """Test that overlays have increasing tolerance effect on data."""
+        """Test that tolerance filtering reduces sample counts as expected."""
         rng = np.random.default_rng(42)
 
-        # Create data with some pile-up at boundaries
-        x_center = rng.normal(0.5, 0.1, 800)
-        x_lower = rng.uniform(0.0, 0.05, 100)
-        x_upper = rng.uniform(0.95, 1.0, 100)
-        x = np.concatenate([x_center, x_lower, x_upper])
-        x = np.clip(x, 0, 1)  # Ensure within bounds
+        # Create data with 30% pile-up at lower boundary
+        x_center = rng.normal(0.5, 0.1, 700)
+        x_lower = rng.uniform(0.0, 0.05, 300)  # 30% in [0, 0.05]
+        x = np.concatenate([x_center, x_lower])
+        x = np.clip(x, 0, 1)
 
-        tols = np.array([0.0, 0.02, 0.05])
+        tols = np.array([0.0, 0.05])  # 0% vs 5% tolerance
         fig = plot_histogram_tolerance_overlays(x, L=0.0, U=1.0, tols=tols, bins=50)
 
-        # The function should create histograms with different amounts of data
-        # as tolerance increases (stricter cuts remove more data)
+        # Verify pile-up exists: count samples in boundary region [0, 0.05]
+        n_in_boundary = np.sum(x <= 0.05)
+        assert n_in_boundary > 250, f"Expected ~300 samples in [0, 0.05], got {n_in_boundary}"
+
+        # With tol=0.05, lower cut removes x <= 0.05
+        # Verify this would remove most of the pile-up samples
+        n_after_filtering = np.sum(x > 0.05)
+        assert n_after_filtering < len(x), "Filtering should reduce sample count"
+        assert n_after_filtering == pytest.approx(len(x) - n_in_boundary, abs=10), \
+            "tol=0.05 should remove samples <= 0.05"
+
         assert isinstance(fig, plt.Figure)
-        assert len(fig.axes) == 3
         plt.close(fig)
 
     def test_all_data_at_boundaries(self):

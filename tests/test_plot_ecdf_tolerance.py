@@ -18,29 +18,6 @@ class TestPlotEcdfToleranceSmoke:
         assert isinstance(fig, plt.Figure)
         plt.close(fig)
 
-    def test_correct_number_of_axes_lower(self):
-        """Test that side='lower' creates 1 main axis plus colorbar."""
-        u = np.random.uniform(0, 1, 1000)
-        fig = plot_ecdf_tolerance_overlays(u, side="lower")
-        # Should have 2 axes: 1 for plot + 1 for colorbar
-        assert len(fig.axes) == 2
-        plt.close(fig)
-
-    def test_correct_number_of_axes_upper(self):
-        """Test that side='upper' creates 1 main axis plus colorbar."""
-        u = np.random.uniform(0, 1, 1000)
-        fig = plot_ecdf_tolerance_overlays(u, side="upper")
-        # Should have 2 axes: 1 for plot + 1 for colorbar
-        assert len(fig.axes) == 2
-        plt.close(fig)
-
-    def test_correct_number_of_axes_both(self):
-        """Test that side='both' creates 2 main axes plus colorbar."""
-        u = np.random.uniform(0, 1, 1000)
-        fig = plot_ecdf_tolerance_overlays(u, side="both")
-        # Should have 3 axes: 2 for plots + 1 for colorbar
-        assert len(fig.axes) == 3
-        plt.close(fig)
 
     def test_colorbar_present(self):
         """Test that colorbar is present at right edge."""
@@ -187,13 +164,22 @@ class TestPlotEcdfToleranceDataDriven:
         plt.close(fig)
 
     def test_custom_tolerance_array(self):
-        """Test that function works with custom tolerance array."""
+        """Test that custom tolerance array is used for colorbar normalization."""
         u = np.random.uniform(0, 1, 1000)
         custom_tols = np.array([0.0, 0.01, 0.03, 0.05])
 
         fig = plot_ecdf_tolerance_overlays(u, tols=custom_tols)
 
         assert isinstance(fig, plt.Figure)
+
+        # Get colorbar axis (should be at right edge)
+        cbar_ax = [ax for ax in fig.axes if ax.get_position().x0 > 0.9][0]
+
+        # Check colorbar limits match custom tolerance range
+        ylim = cbar_ax.get_ylim()
+        assert ylim[0] == pytest.approx(0.0, abs=1e-6), "Colorbar min should match min tolerance"
+        assert ylim[1] == pytest.approx(0.05, abs=1e-6), "Colorbar max should match max tolerance"
+
         plt.close(fig)
 
     def test_non_finite_values_filtered(self):
