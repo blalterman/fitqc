@@ -267,3 +267,51 @@ class TestBoundaryQC:
         # Should detect the artificial pileup even with log-normal base
         assert result.lower_pileup_detected is True
         assert result.t_lo_star is not None
+
+    def test_boundary_qc_detects_upper_pileup_with_normal_base(self):
+        """Test UPPER pileup detection works when base distribution is normal.
+
+        Why this test exists (tests as documentation):
+        - Completes the matrix: we test lower AND upper for each distribution
+        - Normal distributions have thin tails, so upper pileup should be easy to detect
+        - Documents that detection is symmetric regardless of base distribution
+
+        Scenario: Normal(5, 2) base with 5% artificially stuck at upper bound.
+        """
+        rng = np.random.default_rng(42)
+        x = rng.normal(5.0, 2.0, size=10000)
+        x = np.clip(x, 0.0, 10.0)
+        # Inject 5% pileup at upper boundary
+        x[:500] = rng.uniform(9.9, 10.0, size=500)
+
+        result = run_boundary_qc(x, L=0.0, U=10.0, config=BoundaryConfig())
+
+        assert result.upper_pileup_detected is True
+        assert result.t_hi_star is not None
+        assert result.t_hi_star > 0.005
+
+    def test_boundary_qc_detects_upper_pileup_with_lognormal_base(self):
+        """Test UPPER pileup detection works when base distribution is log-normal.
+
+        Why this test exists (tests as documentation):
+        - Log-normal is right-skewed, so it naturally has LESS mass near upper bound
+        - This makes upper pileup particularly easy to detect (stands out more)
+        - Completes the test matrix for all distribution x boundary combinations
+
+        Scenario: Log-normal base with 5% artificially stuck at upper bound.
+        """
+        rng = np.random.default_rng(42)
+        # Generate log-normal base
+        raw = rng.lognormal(1.0, 0.5, size=10000)
+        p01, p99 = np.percentile(raw, [1, 99])
+        x = (raw - p01) / (p99 - p01) * 10
+        x = np.clip(x, 0.0, 10.0)
+        # Inject 5% pileup at upper boundary
+        x[:500] = rng.uniform(9.9, 10.0, size=500)
+
+        result = run_boundary_qc(x, L=0.0, U=10.0, config=BoundaryConfig())
+
+        # Should detect upper pileup easily (log-normal has thin upper tail)
+        assert result.upper_pileup_detected is True
+        assert result.t_hi_star is not None
+        assert result.t_hi_star > 0.005
