@@ -23,6 +23,23 @@ The Algorithm
    - location <= spike_location_max (near z=0, i.e., near x0)
 6. Use elbow detection on the P(z < eps) curve to find eps*
 
+IMPORTANT: Two Different Uses of "Log" (Don't Confuse Them!)
+------------------------------------------------------------
+1. **Log-spaced epsilon SEARCH grid**: We search for the stickiness threshold
+   across many orders of magnitude (10^-12 to 10^-3). Using np.logspace ensures
+   we sample each decade evenly. This is purely an algorithmic choice about
+   how to efficiently search—it has NOTHING to do with the data distribution.
+   The actual data `x` is NEVER transformed to log space.
+
+2. **Log-normal TEST data**: We test against signed log-normal distributions
+   to ensure we don't falsely flag their natural clustering near zero as
+   "stickiness." This is about validating the algorithm against a specific
+   data distribution—it has NOTHING to do with the log-spaced search grid.
+
+The elbow detection uses `log_x=True` because the epsilon grid is log-spaced,
+so kneed needs to work in log space to find elbows correctly. This still
+doesn't transform the actual data—only the threshold search coordinates.
+
 Critical: Avoiding False Positives
 ----------------------------------
 A signed log-normal distribution centered at 0 has natural mass near 0, but
