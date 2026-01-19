@@ -282,8 +282,32 @@ def plot_boundary_diagnostics(result: BoundaryResult, config: PlotConfig) -> Fig
     # Apply tight_layout before adding colorbar to avoid compatibility issues
     fig.tight_layout()
 
-    # Add colorbar to show tolerance gradient
-    # Position it manually to avoid tight_layout conflicts
+    # Colorbar Design Decision
+    # -------------------------
+    # We add the colorbar manually with fig.add_axes() instead of using the
+    # standard fig.colorbar(sm, ax=axes) approach for these reasons:
+    #
+    # 1. tight_layout() conflicts: The standard colorbar placement with
+    #    tight_layout() often causes the colorbar to overlap with plot content
+    #    or creates excessive whitespace. Manual positioning avoids this.
+    #
+    # 2. Consistent placement: With add_axes([left, bottom, width, height]),
+    #    the colorbar is always at [0.92, 0.15, 0.02, 0.7] (right edge, narrow,
+    #    spanning most of the vertical height). This is predictable across
+    #    different subplot configurations.
+    #
+    # 3. No colorbar stealing space: The standard approach "steals" space from
+    #    existing axes. Manual placement with subplots_adjust(right=0.9) gives
+    #    us explicit control over the space allocation.
+    #
+    # Alternative approaches considered:
+    # - constrained_layout=True: Cleaner API but less predictable with our
+    #   multi-panel layout and can have compatibility issues with older matplotlib
+    # - GridSpec with colorbar column: More complex setup for simple use case
+    #
+    # The trade-off is that this approach requires explicit coordinate tuning,
+    # but provides the most reliable cross-version behavior.
+
     sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
     sm.set_array([])
     cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])  # [left, bottom, width, height]
