@@ -46,12 +46,28 @@ class TestPlotSmoke:
         plt.close(fig)
 
     def test_boundary_plot_has_colorbar(self):
-        """Test that boundary plot has a colorbar."""
+        """Test that boundary plot has a colorbar axis.
+
+        The boundary plot creates a colorbar using fig.add_axes() with dimensions
+        [0.92, 0.15, 0.02, 0.7]. We verify this by checking for an axis positioned
+        at the right edge (left > 0.9) with narrow width (width < 0.05).
+        """
         result = create_mock_boundary_result()
         fig = plot_boundary_diagnostics(result, PlotConfig())
-        # Colorbar adds extra axes beyond the main plot axes
-        # At least main plot + colorbar = 2 or more axes
-        assert len(fig.axes) >= 2
+
+        # Colorbar is added at position [0.92, 0.15, 0.02, 0.7]
+        # We look for an axis with these characteristics:
+        # - Positioned at right edge (left > 0.9)
+        # - Narrow width (< 0.05)
+        has_colorbar = False
+        for ax in fig.axes:
+            bbox = ax.get_position()
+            # Check for colorbar characteristics: narrow, at right edge
+            if bbox.x0 > 0.9 and bbox.width < 0.05:
+                has_colorbar = True
+                break
+
+        assert has_colorbar, "Expected boundary plot to have a colorbar axis at right edge"
         plt.close(fig)
 
     def test_log_magnitude_panel_present(self):
