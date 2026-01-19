@@ -78,8 +78,8 @@ class PlotConfig:
         figsize_boundary: Figure size for boundary diagnostics.
     """
 
-    cmap: str = "viridis"
-    dpi: int = 150
+    cmap: str = "Spectral_r"
+    dpi: int = 300
     include_log_abs_panel: bool = True
     figsize_interior: tuple[float, float] = (12, 8)
     figsize_boundary: tuple[float, float] = (14, 10)
