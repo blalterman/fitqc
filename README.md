@@ -144,15 +144,55 @@ masks["alpha"]  # bool array: True = good sample, False = stuck sample
 ### Plotting
 
 ```python
-from fitqc import plot_interior_diagnostics, plot_boundary_diagnostics, PlotConfig
+from fitqc import (
+    plot_interior_diagnostics,
+    plot_boundary_diagnostics,
+    plot_histogram_tolerance_overlays,
+    plot_ecdf_tolerance_overlays,
+    plot_quantile_spacing_overlays,
+    PlotConfig,
+)
 
+# Basic diagnostic plots
 fig = plot_interior_diagnostics(interior_result, PlotConfig())
 fig = plot_boundary_diagnostics(boundary_result, PlotConfig())
+
+# Tolerance-overlay visualizations (for understanding boundary detection)
+fig = plot_histogram_tolerance_overlays(x, L=0, U=10)
+fig = plot_ecdf_tolerance_overlays(u, side='both')
+fig = plot_quantile_spacing_overlays(np.sort(x), L=0, U=10)
 ```
 
 ## Examples
 
-See `examples/run_array_qc.py` for a complete working example.
+### Complete Workflows
+
+- **`examples/run_array_qc.py`** — Full QC pipeline: generate data, run QC, filter samples
+- **`examples/plot_tolerance_overlays.py`** — Tolerance-overlay visualizations for boundary diagnostics
+
+### Tolerance-Overlay Visualizations
+
+The tolerance-overlay functions help you understand how different tolerance thresholds affect boundary pile-up detection:
+
+```python
+from fitqc.plot import (
+    plot_histogram_tolerance_overlays,
+    plot_ecdf_tolerance_overlays,
+    plot_quantile_spacing_overlays,
+)
+
+# Show histograms with varying boundary cuts
+fig = plot_histogram_tolerance_overlays(x, L=0, U=10, tols=np.linspace(0, 0.05, 7))
+
+# Show ECDF changes near boundaries
+u = (x - L) / (U - L)
+fig = plot_ecdf_tolerance_overlays(u, side='both')
+
+# Show quantile spacing compression (indicates pile-up)
+fig = plot_quantile_spacing_overlays(np.sort(x), L=0, U=10)
+```
+
+Run `python examples/plot_tolerance_overlays.py` to see these in action.
 
 ## Requirements
 
