@@ -55,6 +55,7 @@ from fitqc.plot import plot_boundary_diagnostics, plot_interior_diagnostics
 
 # High-level API
 from fitqc.report import QCReport, run_qc
+from fitqc.stickiness import detect_stickiness
 
 # Synthetic data generators
 from fitqc.synth import (
@@ -82,6 +83,7 @@ __all__ = [
     # Core functions
     "compute_u",
     "compute_z",
+    "detect_stickiness",
     # Synthetic data
     "generate_lognormal",
     "generate_normal",

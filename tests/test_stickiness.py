@@ -13,7 +13,6 @@ from fitqc.boundary import BoundaryResult, run_boundary_qc
 from fitqc.config import BoundaryConfig, InteriorConfig
 from fitqc.interior import InteriorResult, run_interior_qc
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -136,9 +135,7 @@ class TestModeDispatch:
         """mode='interior' should return InteriorResult."""
         from fitqc.stickiness import detect_stickiness
 
-        result = detect_stickiness(
-            uniform_data, ref=5.0, L=0.0, U=10.0, mode="interior"
-        )
+        result = detect_stickiness(uniform_data, ref=5.0, L=0.0, U=10.0, mode="interior")
 
         assert isinstance(result, InteriorResult)
         assert isinstance(result.spike_detected, bool)
@@ -259,9 +256,7 @@ class TestAllModeStructure:
         """mode='all' tuple should contain (InteriorResult, BoundaryResult)."""
         from fitqc.stickiness import detect_stickiness
 
-        interior, boundary = detect_stickiness(
-            uniform_data, ref=5.0, L=0.0, U=10.0, mode="all"
-        )
+        interior, boundary = detect_stickiness(uniform_data, ref=5.0, L=0.0, U=10.0, mode="all")
 
         assert isinstance(interior, InteriorResult)
         assert isinstance(interior.spike_detected, bool)
@@ -276,12 +271,8 @@ class TestAllModeStructure:
         """Interior result from mode='all' should match mode='interior'."""
         from fitqc.stickiness import detect_stickiness
 
-        interior_direct = detect_stickiness(
-            uniform_data, ref=5.0, L=0.0, U=10.0, mode="interior"
-        )
-        interior_all, _ = detect_stickiness(
-            uniform_data, ref=5.0, L=0.0, U=10.0, mode="all"
-        )
+        interior_direct = detect_stickiness(uniform_data, ref=5.0, L=0.0, U=10.0, mode="interior")
+        interior_all, _ = detect_stickiness(uniform_data, ref=5.0, L=0.0, U=10.0, mode="all")
 
         assert interior_all.spike_detected == interior_direct.spike_detected
         np.testing.assert_array_equal(interior_all.eps_grid, interior_direct.eps_grid)
@@ -292,9 +283,7 @@ class TestAllModeStructure:
         """Boundary result from mode='all' should have both lower and upper data."""
         from fitqc.stickiness import detect_stickiness
 
-        _, boundary = detect_stickiness(
-            uniform_data, ref=5.0, L=0.0, U=10.0, mode="all"
-        )
+        _, boundary = detect_stickiness(uniform_data, ref=5.0, L=0.0, U=10.0, mode="all")
 
         # Both mass curves should be present and populated
         assert boundary.lower_mass_curve is not None
@@ -327,9 +316,7 @@ class TestScaleParameter:
         x = rng.normal(5.0, 2.0, size=1000)
         scale_value = 3.0
 
-        result = detect_stickiness(
-            x, ref=5.0, L=None, U=None, mode="interior", scale=scale_value
-        )
+        result = detect_stickiness(x, ref=5.0, L=None, U=None, mode="interior", scale=scale_value)
 
         # Should produce valid InteriorResult
         assert isinstance(result, InteriorResult)
@@ -354,18 +341,14 @@ class TestScaleParameter:
         x = rng.normal(5.0, 2.0, size=1000)
         scale_int = 3  # int, not float
 
-        result = detect_stickiness(
-            x, ref=5.0, L=None, U=None, mode="interior", scale=scale_int
-        )
+        result = detect_stickiness(x, ref=5.0, L=None, U=None, mode="interior", scale=scale_int)
 
         # Should produce valid InteriorResult
         assert isinstance(result, InteriorResult)
         assert result.eps_grid.dtype == np.float64
 
         # Compare with float version - should be identical
-        result_float = detect_stickiness(
-            x, ref=5.0, L=None, U=None, mode="interior", scale=3.0
-        )
+        result_float = detect_stickiness(x, ref=5.0, L=None, U=None, mode="interior", scale=3.0)
         np.testing.assert_array_equal(result.mass_curve, result_float.mass_curve)
 
     def test_scale_std_works(self, rng):
@@ -382,9 +365,7 @@ class TestScaleParameter:
         x = rng.normal(5.0, 2.0, size=1000)
         expected_scale = float(np.std(x))
 
-        result = detect_stickiness(
-            x, ref=5.0, L=None, U=None, mode="interior", scale="std"
-        )
+        result = detect_stickiness(x, ref=5.0, L=None, U=None, mode="interior", scale="std")
 
         assert isinstance(result, InteriorResult)
 
@@ -410,9 +391,7 @@ class TestScaleParameter:
         q75, q25 = np.percentile(x, [75, 25])
         expected_scale = float(q75 - q25)
 
-        result = detect_stickiness(
-            x, ref=5.0, L=None, U=None, mode="interior", scale="iqr"
-        )
+        result = detect_stickiness(x, ref=5.0, L=None, U=None, mode="interior", scale="iqr")
 
         assert isinstance(result, InteriorResult)
 
@@ -437,9 +416,7 @@ class TestScaleParameter:
         x = rng.normal(5.0, 2.0, size=1000)
         expected_scale = float(np.max(x) - np.min(x))
 
-        result = detect_stickiness(
-            x, ref=5.0, L=None, U=None, mode="interior", scale="range"
-        )
+        result = detect_stickiness(x, ref=5.0, L=None, U=None, mode="interior", scale="range")
 
         assert isinstance(result, InteriorResult)
 
@@ -477,12 +454,8 @@ class TestScaleParameter:
             )
 
         # Results should be identical (scale was ignored)
-        np.testing.assert_array_equal(
-            result_with_scale.mass_curve, result_without_scale.mass_curve
-        )
-        np.testing.assert_array_equal(
-            result_with_scale.eps_grid, result_without_scale.eps_grid
-        )
+        np.testing.assert_array_equal(result_with_scale.mass_curve, result_without_scale.mass_curve)
+        np.testing.assert_array_equal(result_with_scale.eps_grid, result_without_scale.eps_grid)
 
     def test_invalid_scale_ignored_when_bounds_complete(self, uniform_data):
         """Invalid scale values are ignored (with warning) when bounds are complete.
@@ -526,35 +499,49 @@ class TestScaleParameter:
 
         This test verifies that each scale method (std, iqr, range) actually
         computes a different scale value, resulting in different effective bounds
-        and therefore different mass curves. This catches bugs where all methods
+        and therefore different z-distributions. This catches bugs where all methods
         accidentally use the same formula.
 
         Uses exponential data where std, iqr, and range differ significantly.
+        We verify the scale values themselves are different, and that this produces
+        different histogram distributions (hist_counts).
         """
         from fitqc.stickiness import detect_stickiness
 
         # Exponential data has std != iqr != range
         x = rng.exponential(scale=2.0, size=1000)
 
-        result_std = detect_stickiness(
-            x, ref=2.0, L=None, U=None, mode="interior", scale="std"
+        # Compute the expected scale values
+        scale_std = float(np.std(x))
+        q75, q25 = np.percentile(x, [75, 25])
+        scale_iqr = float(q75 - q25)
+        scale_range = float(np.max(x) - np.min(x))
+
+        # Verify the scale values are actually different
+        assert scale_std != pytest.approx(scale_iqr, rel=0.01), (
+            f"std ({scale_std}) and iqr ({scale_iqr}) are too similar"
         )
-        result_iqr = detect_stickiness(
-            x, ref=2.0, L=None, U=None, mode="interior", scale="iqr"
+        assert scale_std != pytest.approx(scale_range, rel=0.01), (
+            f"std ({scale_std}) and range ({scale_range}) are too similar"
         )
-        result_range = detect_stickiness(
-            x, ref=2.0, L=None, U=None, mode="interior", scale="range"
+        assert scale_iqr != pytest.approx(scale_range, rel=0.01), (
+            f"iqr ({scale_iqr}) and range ({scale_range}) are too similar"
         )
 
-        # Different scales should produce different mass curves
-        assert not np.allclose(result_std.mass_curve, result_iqr.mass_curve), (
-            "std and iqr produced identical results - methods may be using same formula"
+        result_std = detect_stickiness(x, ref=2.0, L=None, U=None, mode="interior", scale="std")
+        result_iqr = detect_stickiness(x, ref=2.0, L=None, U=None, mode="interior", scale="iqr")
+        result_range = detect_stickiness(x, ref=2.0, L=None, U=None, mode="interior", scale="range")
+
+        # Different scales produce different z-distributions, which show up in histograms
+        # (The mass_curve may be all zeros at tiny epsilon values, but hist_counts differ)
+        assert not np.allclose(result_std.hist_counts, result_iqr.hist_counts), (
+            "std and iqr produced identical histograms - methods may be using same formula"
         )
-        assert not np.allclose(result_std.mass_curve, result_range.mass_curve), (
-            "std and range produced identical results - methods may be using same formula"
+        assert not np.allclose(result_std.hist_counts, result_range.hist_counts), (
+            "std and range produced identical histograms - methods may be using same formula"
         )
-        assert not np.allclose(result_iqr.mass_curve, result_range.mass_curve), (
-            "iqr and range produced identical results - methods may be using same formula"
+        assert not np.allclose(result_iqr.hist_counts, result_range.hist_counts), (
+            "iqr and range produced identical histograms - methods may be using same formula"
         )
 
     def test_scale_required_when_L_none(self, rng):
@@ -563,7 +550,7 @@ class TestScaleParameter:
 
         x = rng.normal(5.0, 2.0, size=1000)
 
-        with pytest.raises(ValueError, match=r"scale.*required"):
+        with pytest.raises(ValueError, match=r"requires.*scale"):
             detect_stickiness(x, ref=5.0, L=None, U=10.0, mode="interior", scale=None)
 
     def test_scale_required_when_U_none(self, rng):
@@ -572,7 +559,7 @@ class TestScaleParameter:
 
         x = rng.normal(5.0, 2.0, size=1000)
 
-        with pytest.raises(ValueError, match=r"scale.*required"):
+        with pytest.raises(ValueError, match=r"requires.*scale"):
             detect_stickiness(x, ref=5.0, L=0.0, U=None, mode="interior", scale=None)
 
     def test_scale_must_be_positive(self, rng):
@@ -629,9 +616,7 @@ class TestValidationErrors:
         from fitqc.stickiness import detect_stickiness
 
         with pytest.raises(ValueError, match=r"mode='interior' requires"):
-            detect_stickiness(
-                uniform_data, ref=5.0, L=None, U=None, mode="interior", scale=None
-            )
+            detect_stickiness(uniform_data, ref=5.0, L=None, U=None, mode="interior", scale=None)
 
     def test_unknown_scale_method_raises(self, uniform_data):
         """Unknown scale method should raise ValueError."""
@@ -665,9 +650,7 @@ class TestConfigPassthrough:
         from fitqc.stickiness import detect_stickiness
 
         # Default config
-        result_default = detect_stickiness(
-            uniform_data, ref=5.0, L=0.0, U=10.0, mode="interior"
-        )
+        result_default = detect_stickiness(uniform_data, ref=5.0, L=0.0, U=10.0, mode="interior")
 
         # Custom config with different n_eps
         custom_config = InteriorConfig(n_eps=100)
@@ -690,9 +673,7 @@ class TestConfigPassthrough:
         from fitqc.stickiness import detect_stickiness
 
         # Default config
-        result_default = detect_stickiness(
-            uniform_data, ref=5.0, L=0.0, U=10.0, mode="lower"
-        )
+        result_default = detect_stickiness(uniform_data, ref=5.0, L=0.0, U=10.0, mode="lower")
 
         # Custom config with different n_tols
         custom_config = BoundaryConfig(n_tols=100)
@@ -764,9 +745,7 @@ class TestDetectionCorrectness:
         """Interior result should match run_interior_qc directly."""
         from fitqc.stickiness import detect_stickiness
 
-        wrapper_result = detect_stickiness(
-            uniform_data, ref=5.0, L=0.0, U=10.0, mode="interior"
-        )
+        wrapper_result = detect_stickiness(uniform_data, ref=5.0, L=0.0, U=10.0, mode="interior")
         direct_result = run_interior_qc(uniform_data, x0=5.0, L=0.0, U=10.0)
 
         assert wrapper_result.spike_detected == direct_result.spike_detected
@@ -781,9 +760,7 @@ class TestDetectionCorrectness:
         """Full boundary result should match run_boundary_qc directly."""
         from fitqc.stickiness import detect_stickiness
 
-        _, wrapper_result = detect_stickiness(
-            uniform_data, ref=5.0, L=0.0, U=10.0, mode="all"
-        )
+        _, wrapper_result = detect_stickiness(uniform_data, ref=5.0, L=0.0, U=10.0, mode="all")
         direct_result = run_boundary_qc(uniform_data, L=0.0, U=10.0)
 
         assert wrapper_result.lower_pileup_detected == direct_result.lower_pileup_detected
@@ -802,9 +779,7 @@ class TestDetectionCorrectness:
         """Should detect spike at x0."""
         from fitqc.stickiness import detect_stickiness
 
-        result = detect_stickiness(
-            data_with_x0_spike, ref=5.0, L=0.0, U=10.0, mode="interior"
-        )
+        result = detect_stickiness(data_with_x0_spike, ref=5.0, L=0.0, U=10.0, mode="interior")
 
         assert result.spike_detected is True
         assert result.spike_z_loc is not None
@@ -816,9 +791,7 @@ class TestDetectionCorrectness:
         """Should detect pileup at lower boundary."""
         from fitqc.stickiness import detect_stickiness
 
-        result = detect_stickiness(
-            data_with_lower_pileup, ref=5.0, L=0.0, U=10.0, mode="lower"
-        )
+        result = detect_stickiness(data_with_lower_pileup, ref=5.0, L=0.0, U=10.0, mode="lower")
 
         assert result.lower_pileup_detected is True
         assert result.t_lo_star is not None
@@ -828,9 +801,7 @@ class TestDetectionCorrectness:
         """Should detect pileup at upper boundary."""
         from fitqc.stickiness import detect_stickiness
 
-        result = detect_stickiness(
-            data_with_upper_pileup, ref=5.0, L=0.0, U=10.0, mode="upper"
-        )
+        result = detect_stickiness(data_with_upper_pileup, ref=5.0, L=0.0, U=10.0, mode="upper")
 
         assert result.upper_pileup_detected is True
         assert result.t_hi_star is not None
@@ -840,9 +811,7 @@ class TestDetectionCorrectness:
         """Uniform data should not trigger false positives."""
         from fitqc.stickiness import detect_stickiness
 
-        interior, boundary = detect_stickiness(
-            uniform_data, ref=5.0, L=0.0, U=10.0, mode="all"
-        )
+        interior, boundary = detect_stickiness(uniform_data, ref=5.0, L=0.0, U=10.0, mode="all")
 
         assert interior.spike_detected is False
         # Uniform data should not have significant pileup
@@ -864,9 +833,7 @@ class TestArrayProperties:
         """Interior eps_grid should have correct dtype and shape."""
         from fitqc.stickiness import detect_stickiness
 
-        result = detect_stickiness(
-            uniform_data, ref=5.0, L=0.0, U=10.0, mode="interior"
-        )
+        result = detect_stickiness(uniform_data, ref=5.0, L=0.0, U=10.0, mode="interior")
 
         assert result.eps_grid.dtype == np.float64
         assert result.eps_grid.ndim == 1
@@ -878,9 +845,7 @@ class TestArrayProperties:
         """Interior mass_curve should have correct dtype and shape."""
         from fitqc.stickiness import detect_stickiness
 
-        result = detect_stickiness(
-            uniform_data, ref=5.0, L=0.0, U=10.0, mode="interior"
-        )
+        result = detect_stickiness(uniform_data, ref=5.0, L=0.0, U=10.0, mode="interior")
 
         assert result.mass_curve.dtype == np.float64
         assert result.mass_curve.ndim == 1
@@ -907,9 +872,7 @@ class TestArrayProperties:
         """Boundary mass curves should be monotonically increasing."""
         from fitqc.stickiness import detect_stickiness
 
-        _, boundary = detect_stickiness(
-            uniform_data, ref=5.0, L=0.0, U=10.0, mode="all"
-        )
+        _, boundary = detect_stickiness(uniform_data, ref=5.0, L=0.0, U=10.0, mode="all")
 
         # Both mass curves should be monotonically increasing
         assert np.all(np.diff(boundary.lower_mass_curve) >= 0)
@@ -1096,9 +1059,7 @@ class TestEdgeCases:
         x = rng.uniform(0, 10, size=1000)
         expected_scale = float(np.std(x))
 
-        interior, boundary = detect_stickiness(
-            x, ref=5.0, L=0.0, U=None, mode="all", scale="std"
-        )
+        interior, boundary = detect_stickiness(x, ref=5.0, L=0.0, U=None, mode="all", scale="std")
 
         # Interior should use scale-derived bounds
         assert isinstance(interior, InteriorResult)
@@ -1109,9 +1070,7 @@ class TestEdgeCases:
         effective_L = 5.0 - expected_scale
         effective_U = 5.0 + expected_scale
         direct_interior = run_interior_qc(x, x0=5.0, L=effective_L, U=effective_U)
-        np.testing.assert_array_almost_equal(
-            interior.mass_curve, direct_interior.mass_curve
-        )
+        np.testing.assert_array_almost_equal(interior.mass_curve, direct_interior.mass_curve)
 
         # Boundary should have lower fields populated
         assert isinstance(boundary, BoundaryResult)
@@ -1131,9 +1090,7 @@ class TestEdgeCases:
         x = rng.uniform(0, 10, size=1000)
         expected_scale = float(np.std(x))
 
-        interior, boundary = detect_stickiness(
-            x, ref=5.0, L=None, U=10.0, mode="all", scale="std"
-        )
+        interior, boundary = detect_stickiness(x, ref=5.0, L=None, U=10.0, mode="all", scale="std")
 
         # Interior should use scale-derived bounds
         assert isinstance(interior, InteriorResult)
@@ -1144,9 +1101,7 @@ class TestEdgeCases:
         effective_L = 5.0 - expected_scale
         effective_U = 5.0 + expected_scale
         direct_interior = run_interior_qc(x, x0=5.0, L=effective_L, U=effective_U)
-        np.testing.assert_array_almost_equal(
-            interior.mass_curve, direct_interior.mass_curve
-        )
+        np.testing.assert_array_almost_equal(interior.mass_curve, direct_interior.mass_curve)
 
         # Boundary should have upper fields populated
         assert isinstance(boundary, BoundaryResult)
