@@ -82,6 +82,31 @@ class TestBoundaryQC:
         if result.t_lo_star and result.t_hi_star:
             assert result.t_lo_star > result.t_hi_star * 2
 
+    def test_boundary_qc_detects_both_boundaries(self):
+        """Test detection when pileup exists at BOTH boundaries simultaneously.
+
+        This is a realistic scenario: constrained optimization where some fits
+        hit the lower bound and others hit the upper bound (e.g., a parameter
+        that should be in [0, 1] but the true value is outside that range).
+        """
+        rng = np.random.default_rng(42)
+        x = rng.uniform(0, 10, size=10000)
+        # Add 5% pileup at lower bound
+        x[:500] = rng.uniform(0, 0.1, size=500)
+        # Add 5% pileup at upper bound
+        x[500:1000] = rng.uniform(9.9, 10.0, size=500)
+
+        result = run_boundary_qc(x, L=0.0, U=10.0, config=BoundaryConfig())
+
+        # Both boundaries should be detected
+        assert result.lower_pileup_detected is True
+        assert result.upper_pileup_detected is True
+        assert result.t_lo_star is not None
+        assert result.t_hi_star is not None
+        # Both tolerances should be significant
+        assert result.t_lo_star > 0.005
+        assert result.t_hi_star > 0.005
+
     def test_boundary_qc_returns_correct_grid_shapes(self):
         """Test that result arrays have expected shapes."""
         rng = np.random.default_rng(42)
