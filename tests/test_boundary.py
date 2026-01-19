@@ -141,3 +141,129 @@ class TestBoundaryQC:
         assert result is not None
         assert isinstance(result.lower_pileup_detected, bool)
         assert isinstance(result.upper_pileup_detected, bool)
+
+    def test_boundary_qc_asymmetric_upper_only(self):
+        """Test asymmetric detection with pileup ONLY at upper boundary.
+
+        This test mirrors test_boundary_qc_asymmetric_tolerances but for the upper
+        bound. While the u-transform is mathematically symmetric, this test serves
+        as documentation that upper-only pileup is explicitly tested and works.
+
+        Why this test exists (tests as documentation):
+        - A scientist reading these tests should see both lower-only and upper-only
+        - Confirms the algorithm treats both boundaries identically
+        - Catches any bugs in upper boundary detection that might not affect lower
+        """
+        rng = np.random.default_rng(42)
+        x = rng.uniform(0, 10, size=10000)
+        x[:500] = rng.uniform(9.9, 10.0, size=500)  # Only upper pileup
+
+        result = run_boundary_qc(x, L=0.0, U=10.0, config=BoundaryConfig())
+
+        # Upper should be detected, lower should not (or be much smaller)
+        assert result.upper_pileup_detected is True
+        # Lower tolerance should be smaller than upper
+        if result.t_lo_star and result.t_hi_star:
+            assert result.t_hi_star > result.t_lo_star * 2
+
+    def test_boundary_qc_no_false_positive_normal(self):
+        """Test that normal distribution does NOT trigger false pileup detection.
+
+        Why this test exists:
+        - Normal distributions naturally have less mass at tails than uniform
+        - A centered normal should have even LESS mass near bounds than uniform
+        - This documents that we've verified normal data doesn't false-positive
+
+        Scenario: Parameters drawn from N(5, 2) with bounds [0, 10].
+        Most mass is in the center; very little near 0 or 10.
+        """
+        rng = np.random.default_rng(42)
+        # Normal centered at 5 with std=2, clipped to bounds
+        x = rng.normal(5.0, 2.0, size=10000)
+        x = np.clip(x, 0.0, 10.0)
+
+        result = run_boundary_qc(x, L=0.0, U=10.0, config=BoundaryConfig())
+
+        # Normal data should NOT detect significant pileup at either boundary
+        # (the clipping might create tiny artifacts, but not significant ones)
+        if result.t_lo_star is not None:
+            assert result.t_lo_star < 0.01, "False positive at lower boundary for normal data"
+        if result.t_hi_star is not None:
+            assert result.t_hi_star < 0.01, "False positive at upper boundary for normal data"
+
+    def test_boundary_qc_no_false_positive_lognormal(self):
+        """Test that log-normal distribution does NOT trigger false pileup detection.
+
+        Why this test exists:
+        - Log-normal is heavily skewed right, with natural mass near zero
+        - This is a CRITICAL edge case: the distribution naturally has density
+          near the lower bound, but it's the TAIL of the distribution, not pileup
+        - We must NOT flag this as boundary stickiness
+
+        Scenario: Parameters drawn from LogNormal(1, 0.5) mapped to [0, 10].
+        The log-normal has support (0, inf), so we scale it to fit our bounds.
+        """
+        rng = np.random.default_rng(42)
+        # Generate log-normal data
+        raw = rng.lognormal(1.0, 0.5, size=10000)
+        # Scale to [0, 10] range (using percentiles to avoid outlier issues)
+        p01, p99 = np.percentile(raw, [1, 99])
+        x = (raw - p01) / (p99 - p01) * 10
+        x = np.clip(x, 0.0, 10.0)
+
+        result = run_boundary_qc(x, L=0.0, U=10.0, config=BoundaryConfig())
+
+        # Log-normal should NOT trigger pileup detection
+        # Even though it has mass near zero, it's the natural distribution shape
+        if result.t_lo_star is not None:
+            assert result.t_lo_star < 0.015, "False positive at lower boundary for log-normal data"
+        if result.t_hi_star is not None:
+            assert result.t_hi_star < 0.015, "False positive at upper boundary for log-normal data"
+
+    def test_boundary_qc_detects_pileup_with_normal_base(self):
+        """Test pileup detection works when base distribution is normal.
+
+        Why this test exists:
+        - Most tests use uniform base distribution
+        - Real data is often approximately normal
+        - This documents that detection works regardless of base distribution
+
+        Scenario: Normal(5, 2) base with 5% artificially stuck at lower bound.
+        """
+        rng = np.random.default_rng(42)
+        x = rng.normal(5.0, 2.0, size=10000)
+        x = np.clip(x, 0.0, 10.0)
+        # Inject 5% pileup at lower boundary
+        x[:500] = rng.uniform(0, 0.1, size=500)
+
+        result = run_boundary_qc(x, L=0.0, U=10.0, config=BoundaryConfig())
+
+        assert result.lower_pileup_detected is True
+        assert result.t_lo_star is not None
+        assert result.t_lo_star > 0.005
+
+    def test_boundary_qc_detects_pileup_with_lognormal_base(self):
+        """Test pileup detection works when base distribution is log-normal.
+
+        Why this test exists:
+        - Log-normal already has natural mass near zero (lower bound)
+        - We need to verify we can STILL detect artificial pileup on top of this
+        - The pileup should be distinguishable from the natural tail
+
+        Scenario: Log-normal base with 5% additional artificial pileup at lower bound.
+        The challenge: can we detect the artificial spike above the natural density?
+        """
+        rng = np.random.default_rng(42)
+        # Generate log-normal base
+        raw = rng.lognormal(1.0, 0.5, size=10000)
+        p01, p99 = np.percentile(raw, [1, 99])
+        x = (raw - p01) / (p99 - p01) * 10
+        x = np.clip(x, 0.0, 10.0)
+        # Inject 5% VERY tight pileup at lower boundary (tighter than natural tail)
+        x[:500] = rng.uniform(0, 0.05, size=500)
+
+        result = run_boundary_qc(x, L=0.0, U=10.0, config=BoundaryConfig())
+
+        # Should detect the artificial pileup even with log-normal base
+        assert result.lower_pileup_detected is True
+        assert result.t_lo_star is not None
