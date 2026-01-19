@@ -79,7 +79,26 @@ class TestModuleStructure:
         assert detect_stickiness.__name__ == "detect_stickiness"
 
     def test_signature_matches_spec(self):
-        """Function signature should match the API specification."""
+        """Document and verify the detect_stickiness API contract.
+
+        API Contract
+        ------------
+        Required parameters:
+            x: NDArray[np.floating] - fitted parameter values from optimization
+            ref: float - reference point (x0 for interior, bound value for boundary)
+            L: float | None - lower bound of parameter range
+            U: float | None - upper bound of parameter range
+
+        Optional parameters with defaults:
+            mode: Literal["interior", "lower", "upper", "all"] = "all"
+                Which stickiness checks to perform
+            scale: float | Literal["std", "iqr", "range"] | None = None
+                Normalization scale for unbounded parameters
+            interior_config: InteriorConfig | None = None
+                Configuration for interior detection
+            boundary_config: BoundaryConfig | None = None
+                Configuration for boundary detection
+        """
         from fitqc.stickiness import detect_stickiness
 
         sig = inspect.signature(detect_stickiness)
@@ -295,7 +314,14 @@ class TestScaleParameter:
     """Tests for scale parameter behavior."""
 
     def test_scale_float_works(self, rng):
-        """scale=float should use that value directly."""
+        """scale=float uses the provided value directly as normalization scale.
+
+        Formula: effective_scale = scale (the provided float value)
+        Effective bounds: [ref - scale, ref + scale]
+
+        This allows users to specify an exact scale when they know the
+        appropriate normalization for their parameter.
+        """
         from fitqc.stickiness import detect_stickiness
 
         x = rng.normal(5.0, 2.0, size=1000)
@@ -318,7 +344,14 @@ class TestScaleParameter:
         np.testing.assert_array_almost_equal(result.mass_curve, direct.mass_curve)
 
     def test_scale_std_works(self, rng):
-        """scale='std' should use np.std(x)."""
+        """scale='std' uses standard deviation as normalization scale.
+
+        Formula: effective_scale = np.std(x)
+        Effective bounds: [ref - std(x), ref + std(x)]
+
+        Standard deviation is a natural choice when the data spread
+        is well-characterized by its variance.
+        """
         from fitqc.stickiness import detect_stickiness
 
         x = rng.normal(5.0, 2.0, size=1000)
@@ -338,7 +371,14 @@ class TestScaleParameter:
         np.testing.assert_array_almost_equal(result.mass_curve, direct.mass_curve)
 
     def test_scale_iqr_works(self, rng):
-        """scale='iqr' should use interquartile range."""
+        """scale='iqr' uses interquartile range as normalization scale.
+
+        Formula: effective_scale = np.percentile(x, 75) - np.percentile(x, 25)
+        Effective bounds: [ref - iqr, ref + iqr]
+
+        IQR is robust to outliers, making it a good choice when the data
+        may contain extreme values that shouldn't dominate the scale.
+        """
         from fitqc.stickiness import detect_stickiness
 
         x = rng.normal(5.0, 2.0, size=1000)
@@ -359,7 +399,14 @@ class TestScaleParameter:
         np.testing.assert_array_almost_equal(result.mass_curve, direct.mass_curve)
 
     def test_scale_range_works(self, rng):
-        """scale='range' should use max(x) - min(x)."""
+        """scale='range' uses data range as normalization scale.
+
+        Formula: effective_scale = np.max(x) - np.min(x)
+        Effective bounds: [ref - range, ref + range]
+
+        Range captures the full span of observed data, useful when the
+        extremes are meaningful rather than outliers.
+        """
         from fitqc.stickiness import detect_stickiness
 
         x = rng.normal(5.0, 2.0, size=1000)
@@ -378,19 +425,31 @@ class TestScaleParameter:
 
         np.testing.assert_array_almost_equal(result.mass_curve, direct.mass_curve)
 
-    def test_scale_ignored_when_bounds_complete(self, uniform_data):
-        """When both L and U provided, scale should be ignored."""
+    def test_scale_ignored_when_bounds_complete_warns(self, uniform_data):
+        """When both L and U provided, scale is ignored and a warning is issued.
+
+        When bounds are complete, the effective scale is computed from bounds:
+            effective_scale = max(ref - L, U - ref)
+
+        Any provided scale parameter is ignored, and a UserWarning is issued
+        to alert the user that their scale parameter had no effect.
+        """
+        import warnings
+
         from fitqc.stickiness import detect_stickiness
 
-        # Run with scale (should be ignored)
-        result_with_scale = detect_stickiness(
-            uniform_data, ref=5.0, L=0.0, U=10.0, mode="interior", scale=1000.0
-        )
+        # Run with scale - should warn that it's ignored
+        with pytest.warns(UserWarning, match=r"scale.*ignored.*bounds"):
+            result_with_scale = detect_stickiness(
+                uniform_data, ref=5.0, L=0.0, U=10.0, mode="interior", scale=1000.0
+            )
 
-        # Run without scale
-        result_without_scale = detect_stickiness(
-            uniform_data, ref=5.0, L=0.0, U=10.0, mode="interior", scale=None
-        )
+        # Run without scale - no warning expected
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")  # Turn warnings into errors
+            result_without_scale = detect_stickiness(
+                uniform_data, ref=5.0, L=0.0, U=10.0, mode="interior", scale=None
+            )
 
         # Results should be identical (scale was ignored)
         np.testing.assert_array_equal(
@@ -398,6 +457,42 @@ class TestScaleParameter:
         )
         np.testing.assert_array_equal(
             result_with_scale.eps_grid, result_without_scale.eps_grid
+        )
+
+    def test_scale_methods_produce_different_results(self, rng):
+        """Different scale methods compute different values and produce different results.
+
+        This test verifies that each scale method (std, iqr, range) actually
+        computes a different scale value, resulting in different effective bounds
+        and therefore different mass curves. This catches bugs where all methods
+        accidentally use the same formula.
+
+        Uses exponential data where std, iqr, and range differ significantly.
+        """
+        from fitqc.stickiness import detect_stickiness
+
+        # Exponential data has std != iqr != range
+        x = rng.exponential(scale=2.0, size=1000)
+
+        result_std = detect_stickiness(
+            x, ref=2.0, L=None, U=None, mode="interior", scale="std"
+        )
+        result_iqr = detect_stickiness(
+            x, ref=2.0, L=None, U=None, mode="interior", scale="iqr"
+        )
+        result_range = detect_stickiness(
+            x, ref=2.0, L=None, U=None, mode="interior", scale="range"
+        )
+
+        # Different scales should produce different mass curves
+        assert not np.allclose(result_std.mass_curve, result_iqr.mass_curve), (
+            "std and iqr produced identical results - methods may be using same formula"
+        )
+        assert not np.allclose(result_std.mass_curve, result_range.mass_curve), (
+            "std and range produced identical results - methods may be using same formula"
+        )
+        assert not np.allclose(result_iqr.mass_curve, result_range.mass_curve), (
+            "iqr and range produced identical results - methods may be using same formula"
         )
 
     def test_scale_required_when_L_none(self, rng):
