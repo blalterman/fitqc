@@ -2,6 +2,44 @@
 
 This module provides tools to handle floating-point precision when comparing
 fitted parameter values, particularly for detecting optimizer stickiness.
+
+Why This Module Exists
+----------------------
+When detecting if fitted parameters are "stuck" at initial guesses (x0), we need
+to define what "equal to x0" means. This is surprisingly subtle:
+
+1. **Storage vs Analysis Precision**: Data might be stored as float32 (common in
+   HDF5, parquet) but analyzed as float64. A value that looks "exactly equal" to
+   x0 in float32 might differ by ~1e-7 in float64. We must compare at the
+   appropriate precision.
+
+2. **Magnitude-Dependent Resolution**: Floating-point spacing (ULP) varies with
+   magnitude. Near 1.0, float64 can distinguish values ~2e-16 apart. Near 1e6,
+   only ~1e-10 apart. Our "stickiness threshold" must account for this.
+
+3. **Never Hardcode Epsilon**: Machine epsilon (2.2e-16 for float64, 1.2e-7 for
+   float32) should ALWAYS come from `np.finfo(dtype).eps`. Hardcoding breaks
+   when dtypes change or on non-standard platforms.
+
+Key Concepts
+------------
+- **ULP (Unit in Last Place)**: The spacing between adjacent floating-point
+  numbers at a given value. `ulp_at(1.0, float64) = eps ≈ 2.2e-16`.
+  `ulp_at(1e6, float64) ≈ 1.2e-10`. Use `np.spacing()` to compute.
+
+- **Effective dtype**: The dtype to use for comparisons. "auto" uses the array's
+  native dtype. Override when you know data was originally a different precision.
+
+- **eps_from_ulp**: Converts ULP at x0 to a relative threshold in [0,1] space
+  (normalized by parameter range U-L). This is the minimum distinguishable
+  distance from x0 in normalized coordinates.
+
+Example
+-------
+If x0=1000.0, L=0, U=2000, and data is float32:
+- ULP at 1000 in float32 ≈ 6e-5
+- eps = ulp / (U-L) = 6e-5 / 2000 = 3e-8
+- Any sample within 3e-8 (normalized) of x0 could be "stuck" due to precision
 """
 
 from typing import Literal

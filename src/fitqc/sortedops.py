@@ -2,6 +2,46 @@
 
 This module provides efficient binary search operations for tail mass computation,
 quantile extraction, and range slicing on pre-sorted arrays.
+
+Why This Module Exists
+----------------------
+QC analysis repeatedly queries the same data at many thresholds:
+- Interior QC: "What fraction of samples are within eps of x0?" for 50+ eps values
+- Boundary QC: "What fraction are within tol of bounds?" for 40+ tolerance values
+
+Naive approaches (e.g., `np.sum(x < threshold)`) are O(n) per query. With 10,000
+samples and 50 thresholds, that's 500,000 comparisons. By pre-sorting once (O(n log n))
+and using binary search (O(log n) per query), we reduce to ~10,000 + 50*14 ≈ 10,700
+operations. This matters for interactive use and large datasets.
+
+Key Operations
+--------------
+1. **tail_mass(x_sorted, threshold)**: Computes P(X ≤ threshold), the empirical CDF.
+   This is the core operation for "what fraction of samples fall below this value?"
+   Uses `np.searchsorted(..., side='right')` to count values ≤ threshold.
+
+2. **quantile_by_index(x_sorted, q)**: Returns the value at quantile q. Uses simple
+   floor-based indexing: index = floor(q * (n-1)). This is intentionally simpler than
+   np.quantile's interpolation—we want the actual data value at that position.
+
+3. **slice_by_range(x_sorted, lo, hi)**: Returns indices for the open interval (lo, hi).
+   "Open" means excluding boundaries: values strictly between lo and hi. This is
+   important for interior QC where we want samples NOT at the boundaries.
+
+Why Binary Search (np.searchsorted)?
+------------------------------------
+`np.searchsorted` uses binary search under the hood:
+- `side='left'`: First position where value could be inserted (first index ≥ value)
+- `side='right'`: Last position where value could be inserted (first index > value)
+
+For tail_mass, we use 'right' because we want P(X ≤ t), including values equal to t.
+For slicing, we combine 'right' (for lo) and 'left' (for hi) to get the open interval.
+
+Assumptions
+-----------
+- Input arrays MUST be pre-sorted in ascending order
+- Caller is responsible for sorting; we don't verify (for performance)
+- Works with any floating-point dtype
 """
 
 import numpy as np
