@@ -189,6 +189,11 @@ Phase 6: Integration (SEQUENTIAL - depends on everything)
 |---|----------------|-------|
 | 6.1 | `docs: add README with quickstart and API overview` | README.md |
 
+### Phase 7: CI/CD
+| # | Commit Message | Files |
+|---|----------------|-------|
+| 7.1 | `chore: add GitHub Actions CI workflow` | .github/workflows/ci.yml |
+
 ---
 
 ## Verification Criteria (Definition of Done)
