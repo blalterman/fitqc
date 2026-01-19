@@ -22,12 +22,12 @@ class TestSelection:
         elbow = select_elbow(x, y, curve="concave", direction="increasing")
         assert 4.0 < elbow < 6.0
 
-    def test_elbow_returns_fallback_for_linear(self):
-        """Test that linear data returns None or a valid fallback."""
+    def test_elbow_returns_none_for_linear(self):
+        """Test that linear data returns None (no elbow exists)."""
         x = np.linspace(0, 10, 100)
         y = x / 10
         elbow = select_elbow(x, y, curve="concave", direction="increasing")
-        assert elbow is None or (0 <= elbow <= 10)
+        assert elbow is None
 
     def test_elbow_log_space_ecdf_like(self):
         """Test elbow detection with log-space x-axis (ECDF-like data)."""
