@@ -35,9 +35,15 @@ dev = [
     "ruff>=0.1",
     "pre-commit>=3.0",
 ]
+docs = [
+    "sphinx>=7.0",
+    "sphinx-rtd-theme>=2.0",
+    "sphinx-autodoc-typehints>=2.0",
+]
 
 [project.urls]
 Repository = "https://github.com/blalterman/fitqc"
+Documentation = "https://fitqc.readthedocs.io/"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/fitqc"]
