@@ -33,20 +33,37 @@ from fitqc.sortedops import tail_mass
 
 
 def compute_u(x: np.ndarray, L: float, U: float) -> np.ndarray:
-    """Compute normalized position in [L, U].
+    """Compute normalized position in the parameter range [L, U].
 
-    u = (x - L) / (U - L)
+    Formula: u = (x - L) / (U - L)
 
-    So u=0 at L, u=1 at U, u=0.5 at midpoint.
+    This gives:
+        u = 0   when x is at the lower bound L
+        u = 1   when x is at the upper bound U
+        u = 0.5 when x is at the midpoint
+
+    Why no max() in the denominator (unlike compute_z)?
+    ---------------------------------------------------
+    Here we measure WHERE a value sits in the range, not how far it is from
+    some reference point. The range [L, U] is fixed and symmetric—every value
+    maps linearly to [0, 1]. There's no "reference point" that could be off-center.
+
+    Compare to compute_z (interior.py), which measures distance from x0:
+    - z uses max(x0 - L, U - x0) because x0 might be near one bound
+    - If x0 = 1 with L = 0, U = 10: max distance is 9 (to U), not 1 (to L)
+    - Without max(), z would exceed 1 for some values
+
+    Here, u always stays in [0, 1] for values in [L, U] because we're just
+    rescaling the range, not measuring distance from an off-center point.
 
     Args:
-        x: Array of parameter values.
-        L: Lower bound.
-        U: Upper bound.
+        x: Array of fitted parameter values from your optimization runs.
+        L: Lower bound of the parameter (the constraint minimum).
+        U: Upper bound of the parameter (the constraint maximum).
 
     Returns:
-        Normalized positions in [0, 1] for values within [L, U].
-        Values outside [L, U] will be outside [0, 1].
+        Array of normalized positions. Values in [L, U] map to [0, 1].
+        Values outside bounds will be outside [0, 1] (rare in practice).
     """
     return (x - L) / (U - L)
 

@@ -60,26 +60,50 @@ from fitqc.sortedops import tail_mass
 
 
 def compute_z(x: NDArray[np.floating], x0: float, L: float, U: float) -> NDArray[np.floating]:
-    """Compute normalized distance from x0.
+    """Compute normalized distance from the initial guess x0.
 
-    The z-transform maps samples to their distance from x0, normalized by the
-    maximum possible distance (to the furthest bound). This gives:
-    - z = 0 at x0
-    - z approaches 1 at the furthest bound
+    Formula: z = |x - x0| / max(x0 - L, U - x0)
+
+    This gives:
+        z = 0 when x equals x0 (sample is at the initial guess)
+        z = 1 when x is at the furthest bound from x0
+
+    Why max() in the denominator (unlike compute_u)?
+    ------------------------------------------------
+    The initial guess x0 can be ANYWHERE in the range [L, U], not just the center.
+    We need z to always be in [0, 1] so our spike detection thresholds work
+    consistently regardless of where x0 is placed.
+
+    Example: Parameter range [0, 10] with x0 = 1 (near the lower bound)
+        - Distance from x0 to L: 1 - 0 = 1
+        - Distance from x0 to U: 10 - 1 = 9
+        - max() = 9 (the furthest you can get from x0)
+
+        Without max(), using (U - L) = 10:
+            At x = 10: z = |10 - 1| / 10 = 0.9  (seems OK)
+            At x = 0:  z = |0 - 1| / 10 = 0.1   (WRONG! This is at a bound!)
+
+        With max() = 9:
+            At x = 10: z = |10 - 1| / 9 = 1.0   (correct: at furthest bound)
+            At x = 0:  z = |0 - 1| / 9 = 0.11   (correct: close to x0)
+
+    Compare to compute_u (boundary.py), which measures position in range:
+    - u uses (U - L) because we're mapping the fixed range [L, U] to [0, 1]
+    - There's no off-center reference point, just a linear rescaling
 
     Args:
-        x: Array of sample values.
-        x0: Initial guess value.
-        L: Lower bound of the parameter range.
-        U: Upper bound of the parameter range.
+        x: Array of fitted parameter values from your optimization runs.
+        x0: The initial guess you provided to the optimizer.
+        L: Lower bound of the parameter (the constraint minimum).
+        U: Upper bound of the parameter (the constraint maximum).
 
     Returns:
-        Array of z-values: z = |x - x0| / max(x0 - L, U - x0)
+        Array of z-values in [0, 1]. z=0 means "at x0", z=1 means "at furthest bound".
     """
-    # Maximum distance from x0 to either bound
+    # The furthest any sample can be from x0 is to whichever bound is farther away
     max_dist = max(x0 - L, U - x0)
 
-    # Compute normalized distance
+    # Compute normalized distance: 0 at x0, 1 at furthest bound
     z = np.abs(x - x0) / max_dist
 
     return z
