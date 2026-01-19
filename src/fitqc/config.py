@@ -18,10 +18,11 @@ fitqc detects two types of "optimizer stickiness" in fitted parameters:
    Some optimizers return x0 when they fail to converge or find a better solution.
    This creates a "spike" in the distribution at exactly x0.
 
-   Detection: Compute z = |x - x0| / max(x0 - L, U - x0) ∈ [0, 1]. Samples at
+   Detection: Compute ``z = |x - x0| / max(x0 - L, U - x0)`` ∈ [0, 1]. Samples at
    x0 have z = 0. Look for a spike (narrow peak with high prominence) at z ≈ 0.
 
 The challenge is distinguishing real stickiness from natural variation:
+
 - A normal distribution centered at 0 naturally has mass near 0
 - Uniform data naturally has some samples near bounds
 - We use spike detection (prominence + width) and elbow detection to separate
@@ -63,7 +64,7 @@ class InteriorConfig:
 
     The Algorithm
     -------------
-    1. Transform x → z = |x - x0| / max(x0 - L, U - x0), so z=0 at x0
+    1. Transform x → z = ``|x - x0| / max(x0 - L, U - x0)``, so z=0 at x0
     2. For each eps in logspace(eps_log10_min, eps_log10_max, n_eps):
        - Compute P(z < eps) = "fraction of samples within eps of x0"
     3. Build histogram of z-values

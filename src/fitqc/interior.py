@@ -12,7 +12,7 @@ of samples near z=0.
 
 The Algorithm
 -------------
-1. Transform x -> z = |x - x0| / max(x0 - L, U - x0), so z=0 at x0
+1. Transform x -> z = ``|x - x0| / max(x0 - L, U - x0)``, so z=0 at x0
 2. For each eps in logspace(eps_log10_min, eps_log10_max, n_eps):
    - Compute P(z < eps) = "fraction of samples within eps of x0"
 3. Build histogram of z-values
@@ -62,7 +62,7 @@ from fitqc.sortedops import tail_mass
 def compute_z(x: NDArray[np.floating], x0: float, L: float, U: float) -> NDArray[np.floating]:
     """Compute normalized distance from the initial guess x0.
 
-    Formula: z = |x - x0| / max(x0 - L, U - x0)
+    Formula: ``z = |x - x0| / max(x0 - L, U - x0)``
 
     This gives:
         z = 0 when x equals x0 (sample is at the initial guess)
@@ -79,11 +79,13 @@ def compute_z(x: NDArray[np.floating], x0: float, L: float, U: float) -> NDArray
         - Distance from x0 to U: 10 - 1 = 9
         - max() = 9 (the furthest you can get from x0)
 
-        Without max(), using (U - L) = 10:
+        Without max(), using (U - L) = 10::
+
             At x = 10: z = |10 - 1| / 10 = 0.9  (seems OK)
             At x = 0:  z = |0 - 1| / 10 = 0.1   (WRONG! This is at a bound!)
 
-        With max() = 9:
+        With max() = 9::
+
             At x = 10: z = |10 - 1| / 9 = 1.0   (correct: at furthest bound)
             At x = 0:  z = |0 - 1| / 9 = 0.11   (correct: close to x0)
 
@@ -111,27 +113,21 @@ def compute_z(x: NDArray[np.floating], x0: float, L: float, U: float) -> NDArray
 
 @dataclass
 class InteriorResult:
-    """Result of interior QC analysis.
+    """Result of interior QC analysis."""
 
-    Attributes:
-        spike_detected: Whether a spike at x0 was detected.
-        spike_z_loc: Z-location of the spike (if detected), i.e., the normalized
-            distance from x0 where the spike occurs. Should be near 0 for true stickiness.
-        eps_star: Optimal epsilon threshold from elbow detection (if detected).
-            This represents the "radius" around x0 where stuck samples cluster.
-        eps_grid: Array of epsilon values tested in the mass curve analysis.
-        mass_curve: P(z < eps) for each eps in eps_grid. Shows cumulative
-            fraction of samples within each epsilon of x0.
-        hist_counts: Histogram counts of z-values.
-        hist_edges: Histogram bin edges for z-values.
-    """
-
+    #: Whether a spike at x0 was detected.
     spike_detected: bool
+    #: Z-location of the spike (if detected). Should be near 0 for true stickiness.
     spike_z_loc: float | None
+    #: Optimal epsilon threshold from elbow detection (if detected).
     eps_star: float | None
+    #: Array of epsilon values tested in the mass curve analysis.
     eps_grid: NDArray[np.floating]
+    #: P(z < eps) for each eps in eps_grid.
     mass_curve: NDArray[np.floating]
+    #: Histogram counts of z-values.
     hist_counts: NDArray[np.floating]
+    #: Histogram bin edges for z-values.
     hist_edges: NDArray[np.floating]
 
 
