@@ -279,7 +279,7 @@ class TestRunQC:
         )
         params = {"sigma": x}
 
-        report, masks = run_qc(
+        report, _masks = run_qc(
             params=params,
             spec=spec,
             interior_config=None,
@@ -377,7 +377,7 @@ class TestRunQC:
         boundary_config = BoundaryConfig(n_tols=21)
         precision_config = PrecisionConfig(precision_mode="float64")
 
-        report, masks = run_qc(
+        report, _masks = run_qc(
             params=params,
             spec=spec,
             interior_config=interior_config,
