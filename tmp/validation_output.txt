@@ -1,0 +1,152 @@
+====================================================================================================
+QUANTILE-BASED THRESHOLD DETECTION: PROOF OF CONCEPT VALIDATION
+====================================================================================================
+
+====================================================================================================
+PART 1: BOUNDARY VALIDATION (Linear Space)
+====================================================================================================
+Grid: 41 points from 0.0000 to 0.0500
+Quantile grid: [0.001 0.002 0.005 0.01  0.02  0.05  0.1  ]
+
+
+====================================================================================================
+SCENARIO 1: Boundary Tight Pileup (3% in 0.3% of range)
+====================================================================================================
+
+Data: n=10000, pileup=3%, width=0.003
+True threshold: 0.0030
+
+Single-curve elbow: 0.00375
+Multi-curve elbow (quantile): 0.001
+Multi-curve threshold: 0.000083
+
+Errors:
+  Single: 0.000750
+  Multi:  0.002917
+
+Quantile ratios:
+  q=0.001: ratio=0.083
+  q=0.002: ratio=0.083
+  q=0.005: ratio=0.083
+  q=0.010: ratio=0.083
+  q=0.020: ratio=0.086
+  q=0.050: ratio=0.454
+  q=0.100: ratio=0.500
+
+✗ Single-curve more accurate
+
+====================================================================================================
+SCENARIO 2: Boundary Uniform (No Pileup)
+====================================================================================================
+
+Data: n=10000, uniform [0,1]
+
+Single-curve elbow: 0.03125
+Multi-curve elbow (quantile): 0.05
+Multi-curve threshold: 0.050000
+
+Ratio statistics: mean=0.917, std=0.218
+✓ Ratios near 1.0 (expected for uniform)
+
+====================================================================================================
+SCENARIO 3: Boundary Broad Pileup (10% in 5% of range)
+====================================================================================================
+
+Data: n=10000, pileup=10%, width=0.05
+True threshold: 0.0500
+
+Single-curve elbow: 0.0275
+Multi-curve elbow (quantile): None
+
+Errors:
+  Single: 0.022500
+  Multi: None
+
+
+====================================================================================================
+PART 2: INTERIOR VALIDATION (Log Space)
+====================================================================================================
+Grid: 50 points from 10^-12 to 10^-3 (log-spaced)
+Quantile grid: [0.001 0.002 0.005 0.01  0.02  0.05  0.1  ]
+
+
+====================================================================================================
+SCENARIO 4: Interior Tight Spike (5% at x0)
+====================================================================================================
+
+Data: n=10000, spike=5% at x0
+
+Single-curve elbow: 1.00e-12
+Multi-curve elbow (quantile): 1.00e-03
+Multi-curve epsilon: 1.00e-12
+
+Quantile ratios (should be << 1):
+  q=0.001: ratio=1.000e-09
+  q=0.002: ratio=5.000e-10
+  q=0.005: ratio=2.000e-10
+  q=0.010: ratio=1.000e-10
+  q=0.020: ratio=5.000e-11
+  q=0.050: ratio=1.036e-03
+  q=0.100: ratio=1.000e-02
+
+✓ Mean ratio 1.577e-03 << 1 (tight spike)
+
+====================================================================================================
+SCENARIO 5: Interior Signed Log-Normal (BROAD, NOT a spike)
+====================================================================================================
+/usr/local/lib/python3.11/dist-packages/kneed/knee_locator.py:225: RuntimeWarning: invalid value encountered in divide
+  return (a - min(a)) / (max(a) - min(a))
+
+Data: n=10000, signed log-normal (broad)
+
+Single-curve elbow: None
+Multi-curve elbow (quantile): None
+
+Quantile ratios (should be > 0.5, NOT << 1):
+  q=0.001: ratio=1.000e+00
+  q=0.002: ratio=5.000e-01
+  q=0.005: ratio=2.000e-01
+  q=0.010: ratio=1.000e-01
+  q=0.020: ratio=5.000e-02
+  q=0.050: ratio=2.000e-02
+  q=0.100: ratio=1.000e-02
+
+✗ Mean ratio 2.686e-01 < 0.5 (would misclassify!)
+
+Mass at smallest epsilon: 0.0000
+✓ Very little mass at tiny epsilon (confirms broad)
+
+Figure saved to /home/user/fitqc/tmp/quantile_validation.png
+
+========================================================================================================================
+VALIDATION SUMMARY
+========================================================================================================================
+
+Test Case                      | Single Elbow    | Multi Elbow     | True            | Single Err   | Multi Err   
+------------------------------------------------------------------------------------------------------------------------
+Boundary Tight (0.3%)          | 0.003750        | 0.000083        | 0.003000        | 0.07%        | 0.29%       
+Boundary Uniform               | 0.031250        | 0.050000        | N/A             | N/A          | N/A         
+Boundary Broad (5.0%)          | 0.027500        | None            | 0.050000        | 2.25%        | N/A         
+Interior Spike                 | 0.000000        | 0.000000        | N/A             | N/A          | N/A         
+Interior Log-Normal            | None            | None            | N/A             | N/A          | N/A         
+
+========================================================================================================================
+CONCLUSIONS
+========================================================================================================================
+
+Key Findings:
+------------------------------------------------------------------------------------------------------------------------
+1. Tight boundary pileup: Single-curve more accurate (unexpected)
+2. Uniform data: PASS (ratio=0.917 ≈ 1.0)
+3. Interior spike: PASS (ratio=1.577e-03 << 1)
+4. Signed log-normal: FAIL (ratio=2.686e-01 < 0.5, would misclassify!)
+
+Recommendation:
+------------------------------------------------------------------------------------------------------------------------
+⚠ REVIEW NEEDED
+  Only 2/4 validation tests passed.
+  Investigate failures before proceeding.
+
+========================================================================================================================
+Validation complete!
+========================================================================================================================
