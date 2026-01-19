@@ -40,7 +40,6 @@ __version__ = "0.1.0"
 # Configuration dataclasses
 # Core functions
 # Result dataclasses
-from fitqc.boundary import BoundaryResult, compute_u, run_boundary_qc
 from fitqc.config import (
     BoundaryConfig,
     InteriorConfig,
@@ -48,13 +47,20 @@ from fitqc.config import (
     PrecisionConfig,
     QCSpec,
 )
-from fitqc.interior import InteriorResult, compute_z, run_interior_qc
 
 # Plotting
 from fitqc.plot import plot_boundary_diagnostics, plot_interior_diagnostics
 
 # High-level API
 from fitqc.report import QCReport, run_qc
+from fitqc.stickiness import (
+    BoundaryResult,
+    InteriorResult,
+    compute_u,
+    compute_z,
+    run_boundary_qc,
+    run_interior_qc,
+)
 
 # Synthetic data generators
 from fitqc.synth import (

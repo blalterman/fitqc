@@ -10,10 +10,9 @@ import json
 
 import numpy as np
 
-from fitqc.boundary import BoundaryResult
 from fitqc.config import BoundaryConfig, InteriorConfig, PrecisionConfig, QCSpec
-from fitqc.interior import InteriorResult
 from fitqc.report import NumpyEncoder, QCReport, run_qc
+from fitqc.stickiness import BoundaryResult, InteriorResult
 from fitqc.synth import generate_uniform, generate_with_boundary_pileup, generate_with_x0_spike
 
 

@@ -17,9 +17,8 @@ import numpy as np
 from matplotlib.colors import Normalize
 from matplotlib.figure import Figure
 
-from fitqc.boundary import BoundaryResult
 from fitqc.config import PlotConfig
-from fitqc.interior import InteriorResult
+from fitqc.stickiness import BoundaryResult, InteriorResult
 
 # Use non-interactive backend to avoid display issues
 matplotlib.use("Agg")

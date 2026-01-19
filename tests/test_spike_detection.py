@@ -76,7 +76,7 @@ class TestSpikeDetection:
         Note: The low-level find_peaks may detect peaks due to histogram padding,
         but the full algorithm has additional checks that prevent false positives.
         """
-        from fitqc.interior import run_interior_qc
+        from fitqc.stickiness import run_interior_qc
 
         config = InteriorConfig()
         rng = np.random.default_rng(42)

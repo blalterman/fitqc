@@ -2,8 +2,8 @@
 
 import numpy as np
 
-from fitqc.boundary import compute_u, run_boundary_qc
 from fitqc.config import BoundaryConfig
+from fitqc.stickiness import compute_u, run_boundary_qc
 
 
 class TestComputeU:

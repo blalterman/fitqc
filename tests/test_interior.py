@@ -3,7 +3,7 @@
 import numpy as np
 
 from fitqc.config import InteriorConfig
-from fitqc.interior import InteriorResult, compute_z, run_interior_qc
+from fitqc.stickiness import InteriorResult, compute_z, run_interior_qc
 from fitqc.synth import generate_signed_lognormal
 
 

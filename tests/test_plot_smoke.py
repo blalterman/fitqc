@@ -3,10 +3,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-from fitqc.boundary import BoundaryResult
 from fitqc.config import PlotConfig
-from fitqc.interior import InteriorResult
 from fitqc.plot import plot_boundary_diagnostics, plot_interior_diagnostics
+from fitqc.stickiness import BoundaryResult, InteriorResult
 
 
 def create_mock_interior_result() -> InteriorResult:

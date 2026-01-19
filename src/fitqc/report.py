@@ -40,9 +40,15 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from fitqc.boundary import BoundaryResult, compute_u, run_boundary_qc
 from fitqc.config import BoundaryConfig, InteriorConfig, PrecisionConfig, QCSpec
-from fitqc.interior import InteriorResult, compute_z, run_interior_qc
+from fitqc.stickiness import (
+    BoundaryResult,
+    InteriorResult,
+    compute_u,
+    compute_z,
+    run_boundary_qc,
+    run_interior_qc,
+)
 
 
 class NumpyEncoder(json.JSONEncoder):
