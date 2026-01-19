@@ -51,7 +51,13 @@ from fitqc.config import (
 from fitqc.interior import InteriorResult, compute_z, run_interior_qc
 
 # Plotting
-from fitqc.plot import plot_boundary_diagnostics, plot_interior_diagnostics
+from fitqc.plot import (
+    plot_boundary_diagnostics,
+    plot_ecdf_tolerance_overlays,
+    plot_histogram_tolerance_overlays,
+    plot_interior_diagnostics,
+    plot_quantile_spacing_overlays,
+)
 
 # High-level API
 from fitqc.report import QCReport, run_qc
@@ -93,7 +99,10 @@ __all__ = [
     "generate_with_x0_spike",
     # Plotting
     "plot_boundary_diagnostics",
+    "plot_ecdf_tolerance_overlays",
+    "plot_histogram_tolerance_overlays",
     "plot_interior_diagnostics",
+    "plot_quantile_spacing_overlays",
     "run_boundary_qc",
     "run_interior_qc",
     # High-level API

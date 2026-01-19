@@ -204,6 +204,7 @@ class PlotConfig:
         include_log_abs_panel: Whether to include log-magnitude panel in boundary plots.
         figsize_interior: Figure size for interior diagnostics.
         figsize_boundary: Figure size for boundary diagnostics.
+        figsize_tolerance: Figure size for tolerance overlay visualizations.
     """
 
     cmap: str = "Spectral_r"
@@ -211,6 +212,7 @@ class PlotConfig:
     include_log_abs_panel: bool = True
     figsize_interior: tuple[float, float] = (12, 8)
     figsize_boundary: tuple[float, float] = (14, 10)
+    figsize_tolerance: tuple[float, float] = (12, 8)
 
 
 @dataclass

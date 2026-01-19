@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import Normalize
 from matplotlib.figure import Figure
+from typing import Literal
 
 from fitqc.boundary import BoundaryResult
 from fitqc.config import PlotConfig
@@ -315,6 +316,430 @@ def plot_boundary_diagnostics(result: BoundaryResult, config: PlotConfig) -> Fig
     cbar.set_label("Tolerance")
 
     # Adjust subplot positions to make room for colorbar
+    fig.subplots_adjust(right=0.9)
+
+    return fig
+
+
+def plot_quantile_spacing_overlays(
+    x_sorted: np.ndarray,
+    L: float | None = None,
+    U: float | None = None,
+    tols: np.ndarray | None = None,
+    n_tols: int = 11,
+    q_max: float = 0.1,
+    n_quantiles: int = 100,
+    config: PlotConfig | None = None,
+) -> Figure:
+    """Plot quantile spacing near zero with tolerance overlays.
+
+    Shows dq (spacing between consecutive quantiles) vs quantile index.
+    Compression in spacing indicates pile-up; expansion indicates gaps.
+
+    This function visualizes how quantile spacing changes when different tolerance
+    levels are applied to filter data near boundaries. When L and U are provided,
+    each tolerance level filters the data by removing samples within
+    tol*(U-L) of the boundaries. This helps diagnose boundary pile-up effects.
+
+    Args:
+        x_sorted: Pre-sorted array of values (must be sorted in ascending order).
+        L: Lower bound for tolerance filtering (optional).
+        U: Upper bound for tolerance filtering (optional).
+        tols: Tolerance values for filtering before computing quantiles.
+            If None, uses np.linspace(0, 0.05, n_tols).
+        n_tols: Number of tolerances if tols is None.
+        q_max: Maximum quantile to show (0.1 = first 10%).
+        n_quantiles: Number of quantile points.
+        config: PlotConfig for styling. If None, uses PlotConfig().
+
+    Returns:
+        Figure with spacing curves colored by tolerance.
+
+    Note:
+        L and U are optional. If provided, tolerance filtering is applied by
+        removing samples within tol*(U-L) of each boundary. If not provided,
+        the same data is plotted at all tolerance levels (useful for comparing
+        pre-filtered datasets or when working with normalized z-scores).
+
+    Raises:
+        AssertionError: If x_sorted is not sorted in ascending order.
+    """
+    # Filter non-finite values first
+    x_finite = x_sorted[np.isfinite(x_sorted)]
+
+    # Validate input is sorted (after removing non-finite values)
+    if len(x_finite) > 1:
+        assert np.all(np.diff(x_finite) >= 0), "x_sorted must be sorted in ascending order"
+
+    # Set defaults
+    if config is None:
+        config = PlotConfig()
+
+    if tols is None:
+        tols = np.linspace(0, 0.05, n_tols)
+
+    # Create figure
+    fig, ax = plt.subplots(1, 1, figsize=config.figsize_tolerance, dpi=config.dpi)
+
+    # Get colormap
+    cmap = plt.get_cmap(config.cmap)
+    norm = Normalize(vmin=tols[0], vmax=tols[-1])
+
+    # Create alpha gradient for visibility
+    alphas = np.linspace(0.2, 0.7, len(tols))
+
+    # Track median spacing for tol=0 (for reference line)
+    median_spacing_ref = None
+
+    # Plot spacing for each tolerance
+    for i, tol in enumerate(tols):
+        # Use the already cleaned data
+        x_clean = x_finite
+
+        # Apply tolerance filtering if bounds are provided
+        if L is not None and U is not None:
+            # Filter based on tolerance: keep samples outside tol*(U-L) from boundaries
+            margin = tol * (U - L)
+            x_filt = x_clean[(x_clean > L + margin) & (x_clean < U - margin)]
+        else:
+            # No filtering, use all data
+            x_filt = x_clean
+
+        # Skip if filtered array is too small
+        if len(x_filt) < 2:
+            continue
+
+        # Compute quantile indices from 0 to q_max
+        n_filt = len(x_filt)
+        max_idx = int(q_max * n_filt)
+
+        # Ensure we have enough points
+        if max_idx < 2:
+            continue
+
+        # Adjust n_quantiles if it exceeds available data
+        n_q = min(n_quantiles, max_idx)
+        q_indices = np.linspace(0, max_idx - 1, n_q).astype(int)
+        q_indices = np.clip(q_indices, 0, n_filt - 1)
+
+        # Extract quantile values
+        quantiles = x_filt[q_indices]
+
+        # Compute spacing
+        dq = np.diff(quantiles)
+
+        # Skip if no spacing to plot
+        if len(dq) == 0:
+            continue
+
+        # Store median spacing for tol=0
+        if i == 0 and median_spacing_ref is None:
+            median_spacing_ref = np.median(dq)
+
+        # Plot with color and alpha
+        color = cmap(norm(tol))
+        ax.plot(
+            np.arange(len(dq)),
+            dq,
+            color=color,
+            alpha=alphas[i],
+            linewidth=2,
+            zorder=i,
+        )
+
+    # Add reference line for median spacing (if available)
+    if median_spacing_ref is not None:
+        ax.axhline(
+            median_spacing_ref,
+            color="gray",
+            linestyle="--",
+            linewidth=1,
+            alpha=0.5,
+            label=f"Median spacing (tol=0): {median_spacing_ref:.2e}",
+        )
+        ax.legend(loc="upper right")
+
+    # Labels and title
+    ax.set_xlabel("Quantile index")
+    ax.set_ylabel("Spacing (dq)")
+    ax.set_title("Quantile spacing near lower tail")
+    ax.grid(True, alpha=0.3)
+
+    # Apply tight_layout before adding colorbar
+    fig.tight_layout()
+
+    # Add colorbar (following the same pattern as plot_boundary_diagnostics)
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])  # [left, bottom, width, height]
+    cbar = fig.colorbar(sm, cax=cbar_ax, orientation="vertical")
+    cbar.set_label("Tolerance")
+
+    # Adjust subplot positions to make room for colorbar
+    fig.subplots_adjust(right=0.9)
+
+    return fig
+
+
+def plot_ecdf_tolerance_overlays(
+    u: np.ndarray,
+    tols: np.ndarray | None = None,
+    n_tols: int = 11,
+    side: Literal["lower", "upper", "both"] = "lower",
+    config: PlotConfig | None = None,
+) -> Figure:
+    """Plot ECDF near boundaries with tolerance-colored overlays.
+
+    Shows how the empirical CDF changes as samples near boundaries are removed.
+
+    Args:
+        u: Normalized positions in [0, 1] where u = (x - L) / (U - L).
+        tols: Array of tolerance values. If None, uses linspace(0, 0.05, n_tols).
+        n_tols: Number of tolerances if tols is None.
+        side: Which boundary to visualize ("lower", "upper", or "both").
+        config: PlotConfig for styling.
+
+    Returns:
+        Figure with ECDF curves colored by tolerance.
+    """
+    # Validate side parameter
+    if side not in ["lower", "upper", "both"]:
+        raise ValueError(f"side must be 'lower', 'upper', or 'both', got {side}")
+
+    # Set default config
+    if config is None:
+        config = PlotConfig()
+
+    # Set default tolerances
+    if tols is None:
+        tols = np.linspace(0, 0.05, n_tols)
+
+    # Filter non-finite values
+    u_clean = u[np.isfinite(u)]
+
+    # Helper function to compute ECDF
+    def _compute_ecdf(u_filtered):
+        if len(u_filtered) == 0:
+            return np.array([]), np.array([])
+        u_sorted = np.sort(u_filtered)
+        n = len(u_sorted)
+        y = np.arange(1, n + 1) / n
+        return u_sorted, y
+
+    # Setup figure
+    n_panels = 2 if side == "both" else 1
+    fig, axes = plt.subplots(1, n_panels, figsize=config.figsize_tolerance, dpi=config.dpi)
+    if n_panels == 1:
+        axes = [axes]
+
+    # Setup colormap
+    cmap = plt.get_cmap(config.cmap)
+    norm = Normalize(vmin=tols[0], vmax=tols[-1])
+
+    # Setup alpha values (varying transparency)
+    alphas = np.linspace(0.2, 0.7, len(tols))
+
+    # Plot lower boundary ECDF
+    if side in ["lower", "both"]:
+        ax_idx = 0
+        ax = axes[ax_idx]
+
+        for i, tol in enumerate(tols):
+            # Filter data
+            u_filt = u_clean[u_clean > tol]
+
+            # Compute ECDF
+            u_sorted, ecdf_vals = _compute_ecdf(u_filt)
+
+            # Skip if empty
+            if len(u_sorted) == 0:
+                continue
+
+            # Get color
+            color = cmap(norm(tol))
+
+            # Plot ECDF
+            ax.plot(u_sorted, ecdf_vals, color=color, alpha=alphas[i], linewidth=2, zorder=i)
+
+        # Add reference line for uniform ECDF (y = x)
+        ax.plot([0, 0.1], [0, 0.1], "k--", alpha=0.5, linewidth=1, label="Uniform (y=x)")
+
+        ax.set_xlabel("u (normalized position)")
+        ax.set_ylabel("ECDF")
+        ax.set_title("ECDF near lower boundary")
+        ax.set_xlim(0, 0.1)
+        ax.grid(True, alpha=0.3)
+        ax.legend(loc="lower right")
+
+    # Plot upper boundary ECDF
+    if side in ["upper", "both"]:
+        ax_idx = 1 if side == "both" else 0
+        ax = axes[ax_idx]
+
+        for i, tol in enumerate(tols):
+            # Filter data
+            u_filt = u_clean[u_clean < 1 - tol]
+
+            # Compute ECDF
+            u_sorted, ecdf_vals = _compute_ecdf(u_filt)
+
+            # Skip if empty
+            if len(u_sorted) == 0:
+                continue
+
+            # Get color
+            color = cmap(norm(tol))
+
+            # Plot ECDF
+            ax.plot(u_sorted, ecdf_vals, color=color, alpha=alphas[i], linewidth=2, zorder=i)
+
+        # Add reference line for uniform ECDF (y = x)
+        # For the upper boundary plot, the x range is [0.9, 1.0]
+        # The reference line should still be y = x
+        ax.plot([0.9, 1.0], [0.9, 1.0], "k--", alpha=0.5, linewidth=1, label="Uniform (y=x)")
+
+        ax.set_xlabel("u (normalized position)")
+        ax.set_ylabel("ECDF")
+        ax.set_title("ECDF near upper boundary")
+        ax.set_xlim(0.9, 1.0)
+        ax.grid(True, alpha=0.3)
+        ax.legend(loc="lower right")
+
+    # Apply tight_layout before adding colorbar
+    fig.tight_layout()
+
+    # Add colorbar (same pattern as boundary diagnostics)
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+    cbar = fig.colorbar(sm, cax=cbar_ax, orientation="vertical")
+    cbar.set_label("Tolerance")
+
+    # Adjust subplot positions to make room for colorbar
+    fig.subplots_adjust(right=0.9)
+
+    return fig
+
+def plot_histogram_tolerance_overlays(
+    x: np.ndarray,
+    L: float,
+    U: float,
+    tols: np.ndarray | None = None,
+    n_tols: int = 11,
+    bins: int = 100,
+    config: PlotConfig | None = None,
+) -> Figure:
+    """Plot histogram overlays showing effect of boundary tolerance cuts.
+
+    For each tolerance t, shows histogram of data kept after applying:
+    - Lower cut: x > L + t*(U-L)
+    - Upper cut: x < U - t*(U-L)
+
+    Histograms are colored by tolerance using a colormap with colorbar.
+    Higher tolerances (stricter cuts) have higher zorder (drawn on top).
+    Uses varying alpha: low tolerance = faint (alpha=0.2), high tolerance = opaque (alpha=0.7).
+
+    Args:
+        x: Array of parameter values.
+        L: Lower bound.
+        U: Upper bound.
+        tols: Array of tolerance values to plot. If None, uses linspace(0, 0.05, n_tols).
+        n_tols: Number of tolerances if tols is None.
+        bins: Number of histogram bins.
+        config: PlotConfig for styling. Uses defaults if None.
+
+    Returns:
+        Figure with two subplots (lower cuts, upper cuts) and colorbar.
+    """
+    # Validate inputs
+    if L >= U:
+        raise ValueError(f"L must be less than U, got L={L}, U={U}")
+
+    # Handle defaults
+    if config is None:
+        config = PlotConfig()
+
+    if tols is None:
+        tols = np.linspace(0, 0.05, n_tols)
+
+    # Filter non-finite values
+    x = x[np.isfinite(x)]
+
+    # Create figure with two subplots
+    fig, axes = plt.subplots(1, 2, figsize=config.figsize_tolerance, dpi=config.dpi)
+
+    # Get colormap and create normalization
+    cmap = plt.get_cmap(config.cmap)
+    norm = Normalize(vmin=tols[0], vmax=tols[-1])
+
+    # Compute fixed bin edges
+    bin_edges = np.linspace(L, U, bins + 1)
+
+    # Compute alphas
+    alphas = np.linspace(0.2, 0.7, len(tols))
+
+    # Get colors for each tolerance
+    colors = [cmap(norm(t)) for t in tols]
+
+    # Left subplot: lower cuts
+    ax_lower = axes[0]
+    for i, tol in enumerate(tols):
+        # Filter: x > L + tol*(U-L)
+        x_filt = x[x > L + tol * (U - L)]
+
+        # Skip if empty
+        if len(x_filt) == 0:
+            continue
+
+        # Plot histogram
+        ax_lower.hist(
+            x_filt,
+            bins=bin_edges,
+            histtype="stepfilled",
+            alpha=alphas[i],
+            color=colors[i],
+            zorder=i,
+        )
+
+    ax_lower.set_xlabel("Parameter value")
+    ax_lower.set_ylabel("Count")
+    ax_lower.set_title("Lower cuts: x > L + tol*(U-L)")
+    ax_lower.grid(True, alpha=0.3)
+
+    # Right subplot: upper cuts
+    ax_upper = axes[1]
+    for i, tol in enumerate(tols):
+        # Filter: x < U - tol*(U-L)
+        x_filt = x[x < U - tol * (U - L)]
+
+        # Skip if empty
+        if len(x_filt) == 0:
+            continue
+
+        # Plot histogram
+        ax_upper.hist(
+            x_filt,
+            bins=bin_edges,
+            histtype="stepfilled",
+            alpha=alphas[i],
+            color=colors[i],
+            zorder=i,
+        )
+
+    ax_upper.set_xlabel("Parameter value")
+    ax_upper.set_ylabel("Count")
+    ax_upper.set_title("Upper cuts: x < U - tol*(U-L)")
+    ax_upper.grid(True, alpha=0.3)
+
+    # Apply tight_layout before adding colorbar
+    fig.tight_layout()
+
+    # Add colorbar (following pattern from plot_boundary_diagnostics)
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+    cbar = fig.colorbar(sm, cax=cbar_ax, orientation="vertical")
+    cbar.set_label("Tolerance")
     fig.subplots_adjust(right=0.9)
 
     return fig
