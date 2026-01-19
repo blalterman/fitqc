@@ -1,34 +1,109 @@
-# Stickiness Wrapper Implementation Prompt
+# Stickiness Wrapper Implementation
 
 ## Task
 
-Implement a thin wrapper `detect_stickiness()` function that provides a unified API over the existing `run_interior_qc()` and `run_boundary_qc()` functions.
+Implement `detect_stickiness()`, a thin wrapper providing a unified API over the existing `run_interior_qc()` and `run_boundary_qc()` functions.
 
 **Key constraint:** Do NOT modify existing modules. This is an additive change only.
 
 ---
 
-## Context
+## Decisions
 
-Read these files before starting:
-- `plans/stickiness-wrapper-plan.md` — Implementation plan and API specification
-- `plans/stickiness-wrapper-tests.md` — Complete test specifications
+- Create thin wrapper over existing modules; do NOT merge `interior.py`/`boundary.py`
+- Do NOT extract commonalities to `util.py` (already factored into `sortedops.py`, `selection.py`)
+- Return union type `InteriorResult | BoundaryResult`; do NOT create unified `StickinessResult`
+- Do NOT wrap `compute_z`/`compute_u` (keep in original modules)
+- `detect_stickiness()` is the primary API; existing functions are "advanced"
+- Four modes: `"interior"`, `"lower"`, `"upper"`, `"all"`
+- Lower/upper modes return `BoundaryResult` with unused direction's fields set to `None`
+- Require `scale` parameter when bounds are incomplete
+- Scale options: `float | "std" | "iqr" | "range" | None`
+- Test-first development; non-trivial assertions only
 
 ---
 
-## Execution Steps
+## Non-Goals
+
+- **DO NOT** modify `src/fitqc/interior.py`
+- **DO NOT** modify `src/fitqc/boundary.py`
+- **DO NOT** modify existing test files
+- **DO NOT** create a unified `StickinessResult` type
+- **DO NOT** extract utilities to a new `util.py`
+- **DO NOT** re-export `compute_z`/`compute_u` from wrapper
+- **DO NOT** merge algorithms into single implementation
+- **DO NOT** add deprecation warnings to existing functions
+
+---
+
+## API Specification
+
+```python
+def detect_stickiness(
+    x: NDArray[np.floating],
+    ref: float,
+    L: float | None,
+    U: float | None,
+    mode: Literal["interior", "lower", "upper", "all"] = "all",
+    scale: float | Literal["std", "iqr", "range"] | None = None,
+    interior_config: InteriorConfig | None = None,
+    boundary_config: BoundaryConfig | None = None,
+) -> InteriorResult | BoundaryResult | tuple[InteriorResult, BoundaryResult]:
+```
+
+**Return types by mode:**
+
+| Mode | Return Type | Notes |
+|------|-------------|-------|
+| `"interior"` | `InteriorResult` | Checks stickiness at `ref` (typically x0) |
+| `"lower"` | `BoundaryResult` | `upper_*` fields are `None`/`False` |
+| `"upper"` | `BoundaryResult` | `lower_*` fields are `None`/`False` |
+| `"all"` | `tuple[InteriorResult, BoundaryResult]` | Full boundary result (both directions) |
+
+**Validation rules:**
+
+| Mode | L required | U required | scale alternative |
+|------|------------|------------|-------------------|
+| `"interior"` | No | No | Yes (if either bound missing) |
+| `"lower"` | Yes | No | N/A |
+| `"upper"` | No | Yes | N/A |
+| `"all"` | Partial | Partial | Yes (for interior if bounds missing) |
+
+**Scale behavior:**
+
+| Condition | Behavior |
+|-----------|----------|
+| Both L and U provided | Scale ignored; uses `max(ref - L, U - ref)` |
+| Either bound is None | Scale **required** |
+| `scale=float` | Use value directly (must be positive) |
+| `scale="std"` | Use `np.std(x)` |
+| `scale="iqr"` | Use `np.percentile(x, 75) - np.percentile(x, 25)` |
+| `scale="range"` | Use `np.max(x) - np.min(x)` |
+
+---
+
+## Workflow
 
 ### Step 1: Create Branch
-
 ```bash
 git checkout main
-git pull origin main
+git pull --ff-only
 git checkout -b claude/stickiness-wrapper-<session-id>
 ```
 
-### Step 2: Write Tests First
+### Step 2: Write Tests (STOP FOR APPROVAL)
 
-Create `tests/test_stickiness.py` with ALL tests from `plans/stickiness-wrapper-tests.md`.
+Create `tests/test_stickiness.py` with comprehensive tests covering:
+1. Module structure (importable, correct signature)
+2. Mode dispatch (returns correct types)
+3. Boundary mode fields (correct nulling)
+4. All mode (tuple structure)
+5. Scale parameter (all methods, validation)
+6. Validation errors (clear messages)
+7. Config passthrough (affects results)
+8. Detection correctness (matches direct calls)
+9. Array properties (dtype, shape, values)
+10. Edge cases (single sample, all identical, ref at bounds)
 
 **Test requirements:**
 - Non-trivial assertions (verify type, shape, dtype, values)
@@ -37,36 +112,76 @@ Create `tests/test_stickiness.py` with ALL tests from `plans/stickiness-wrapper-
 - Use `pytest.approx` for float comparisons
 - Use `pytest.raises` for error testing
 
-**Test file structure:**
-```python
-"""Tests for the detect_stickiness unified API."""
-
-import numpy as np
-import pytest
-
-# Import after implementation exists
-# from fitqc.stickiness import detect_stickiness
-# from fitqc.interior import InteriorResult, run_interior_qc
-# from fitqc.boundary import BoundaryResult, run_boundary_qc
-# from fitqc.config import InteriorConfig, BoundaryConfig
-
-
-class TestStickinessModuleStructure:
-    """Verify module exports and function signatures."""
-    ...
-
-class TestModeDispatch:
-    """Verify correct function is called for each mode."""
-    ...
-
-# Continue with all test classes from test plan
-```
-
-**STOP after writing tests. Get user approval before proceeding.**
+**STOP HERE. Get user approval before implementation.**
 
 ### Step 3: Implement Wrapper
 
-Create `src/fitqc/stickiness.py`:
+Create `src/fitqc/stickiness.py` using the Reference Implementation below.
+
+### Step 4: Update Exports
+
+Edit `src/fitqc/__init__.py`:
+- Add import: `from fitqc.stickiness import detect_stickiness`
+- Add to `__all__`: `"detect_stickiness"`
+
+### Step 5: Verify
+```bash
+pytest -v                              # All tests pass
+ruff check .                           # No linting errors
+ruff format --check .                  # Format check passes
+python examples/run_array_qc.py        # Example still works
+python -c "from fitqc import detect_stickiness; print(detect_stickiness)"
+```
+
+### Step 6: Commit
+```bash
+git add tests/test_stickiness.py
+git commit -m "test(stickiness): add tests for detect_stickiness unified API
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+
+git add src/fitqc/stickiness.py src/fitqc/__init__.py
+git commit -m "feat(stickiness): add detect_stickiness unified API
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+
+git push -u origin claude/stickiness-wrapper-<session-id>
+```
+
+---
+
+## Validation Criteria
+
+### Code
+- [ ] `from fitqc import detect_stickiness` succeeds
+- [ ] `from fitqc.stickiness import detect_stickiness` succeeds
+- [ ] All 4 modes return correct types
+- [ ] Mode `"lower"` sets `upper_*` fields to `None`/`False`
+- [ ] Mode `"upper"` sets `lower_*` fields to `None`/`False`
+- [ ] Scale parameter works: float, "std", "iqr", "range"
+- [ ] Missing bounds without scale raises `ValueError`
+- [ ] Invalid mode raises `ValueError`
+
+### Tests
+- [ ] All existing tests pass (101 tests)
+- [ ] All new tests pass (~51 tests)
+- [ ] Tests verify type, shape, dtype, values (not just existence)
+
+### Files
+- [ ] `src/fitqc/interior.py` unchanged
+- [ ] `src/fitqc/boundary.py` unchanged
+- [ ] `tests/test_interior.py` unchanged
+- [ ] `tests/test_boundary.py` unchanged
+
+### Lint
+- [ ] `ruff check .` passes
+- [ ] `ruff format --check .` passes
+
+---
+
+## Reference Implementation
+
+Use this approved code for `src/fitqc/stickiness.py`:
 
 ```python
 """Unified stickiness detection API.
@@ -80,13 +195,6 @@ The function wraps:
 - run_boundary_qc() from fitqc.boundary
 
 These underlying modules remain unchanged and available for advanced use.
-
-Design Decisions
-----------------
-1. Thin wrapper: Delegates to existing functions, no duplicate logic
-2. Union return type: Returns InteriorResult | BoundaryResult, not unified type
-3. Scale parameter: Enables unbounded parameter analysis
-4. Mode parameter: Provides granular control (interior/lower/upper/all)
 """
 
 from __future__ import annotations
@@ -414,91 +522,3 @@ def _run_all(
 
     return (interior_result, boundary_result)
 ```
-
-### Step 4: Update Exports
-
-Edit `src/fitqc/__init__.py`:
-
-Add to imports:
-```python
-from fitqc.stickiness import detect_stickiness
-```
-
-Add to `__all__`:
-```python
-"detect_stickiness",
-```
-
-### Step 5: Verify
-
-```bash
-# Run all tests
-pytest -v
-
-# Check linting
-ruff check .
-ruff format --check .
-
-# Verify example still works
-python examples/run_array_qc.py
-
-# Verify new function importable
-python -c "from fitqc import detect_stickiness; print(detect_stickiness)"
-```
-
-### Step 6: Commit
-
-```bash
-git add tests/test_stickiness.py
-git commit -m "test(stickiness): add tests for detect_stickiness unified API
-
-Add comprehensive tests for the new detect_stickiness() wrapper function.
-Tests cover: mode dispatch, scale handling, validation errors, detection
-correctness, array properties, and edge cases.
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
-
-git add src/fitqc/stickiness.py src/fitqc/__init__.py
-git commit -m "feat(stickiness): add detect_stickiness unified API
-
-Add thin wrapper providing unified interface for stickiness detection:
-- Mode parameter: 'interior', 'lower', 'upper', 'all'
-- Scale parameter: enables unbounded parameter analysis
-- Returns union type: InteriorResult | BoundaryResult
-
-Existing interior.py and boundary.py modules unchanged.
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
-
-git push -u origin claude/stickiness-wrapper-<session-id>
-```
-
----
-
-## Verification Checklist
-
-- [ ] All 101 existing tests still pass
-- [ ] All ~51 new tests pass
-- [ ] `ruff check .` passes
-- [ ] `ruff format --check .` passes
-- [ ] `python examples/run_array_qc.py` works
-- [ ] `from fitqc import detect_stickiness` works
-- [ ] No modifications to `interior.py` or `boundary.py`
-- [ ] No modifications to existing test files
-
----
-
-## Design Propositions Summary
-
-The following decisions were made with For/Against analysis:
-
-| Decision | Choice | Key Rationale |
-|----------|--------|---------------|
-| Extract to util.py | No | Already factored into sortedops.py, selection.py |
-| Unified StickinessResult | No | Preserves type safety, domain semantics |
-| Wrap compute_z/compute_u | No | Implementation details, not public API |
-| Primary API | Yes | Simpler onboarding for new users |
-| Mode options | 4 modes | Granular control, symmetric API |
-| Scale options | 4 methods | User choice based on data characteristics |
-
-See conversation history for detailed propositions.

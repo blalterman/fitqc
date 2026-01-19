@@ -103,90 +103,14 @@ def detect_stickiness(
 
 ---
 
-## Implementation Structure
+## Implementation
 
-### `src/fitqc/stickiness.py`
+The approved reference implementation is in `prompts/stickiness-wrapper-prompt.md` (Reference Implementation section).
 
-```python
-"""Unified stickiness detection API.
-
-This module provides detect_stickiness(), a single entry point for detecting
-optimizer stickiness at reference points (initial guess x0, lower bound L,
-upper bound U).
-
-The function wraps:
-- run_interior_qc() from fitqc.interior
-- run_boundary_qc() from fitqc.boundary
-
-These underlying modules remain unchanged and available for advanced use.
-"""
-
-from __future__ import annotations
-
-from typing import Literal
-
-import numpy as np
-from numpy.typing import NDArray
-
-from fitqc.boundary import BoundaryResult, run_boundary_qc
-from fitqc.config import BoundaryConfig, InteriorConfig
-from fitqc.interior import InteriorResult, run_interior_qc
-
-
-def _compute_effective_scale(
-    x: NDArray[np.floating],
-    ref: float,
-    L: float | None,
-    U: float | None,
-    scale: float | Literal["std", "iqr", "range"] | None,
-) -> float:
-    """Compute normalization scale for distance calculations."""
-    # Implementation details in test file
-
-
-def _validate_mode_bounds(
-    mode: str,
-    L: float | None,
-    U: float | None,
-    scale: float | str | None,
-) -> None:
-    """Validate mode is compatible with provided bounds."""
-    # Implementation details in test file
-
-
-def detect_stickiness(
-    x: NDArray[np.floating],
-    ref: float,
-    L: float | None,
-    U: float | None,
-    mode: Literal["interior", "lower", "upper", "all"] = "all",
-    scale: float | Literal["std", "iqr", "range"] | None = None,
-    interior_config: InteriorConfig | None = None,
-    boundary_config: BoundaryConfig | None = None,
-) -> InteriorResult | BoundaryResult | tuple[InteriorResult, BoundaryResult]:
-    """
-    Detect optimizer stickiness at reference points.
-
-    [Full docstring - see test file for expected behavior]
-    """
-    # 1. Validate mode
-    # 2. Validate bounds for mode
-    # 3. Dispatch based on mode
-    # 4. For lower/upper, filter BoundaryResult fields
-    # 5. Return appropriate type
-```
-
-### `src/fitqc/__init__.py` Changes
-
-Add to imports:
-```python
-from fitqc.stickiness import detect_stickiness
-```
-
-Add to `__all__`:
-```python
-"detect_stickiness",
-```
+**Files to create/modify:**
+- `src/fitqc/stickiness.py` — Full implementation (~340 lines)
+- `src/fitqc/__init__.py` — Add import and `__all__` entry
+- `tests/test_stickiness.py` — Comprehensive tests (~51 tests)
 
 ---
 
@@ -222,13 +146,259 @@ python -c "from fitqc import detect_stickiness; print(detect_stickiness)"
 
 ---
 
-## Propositions Reference
+## Decision Log (Archival)
 
-See conversation history for detailed For/Against/Decision propositions on:
-- Question 0: Extract to util.py
-- Question 1: Unified StickinessResult
-- Question 2: Wrap compute_z/compute_u
-- Question 3: Primary API
-- Question 4: Mode options
-- Question 5: Unbounded handling
-- Question 5b: Scale options
+This section provides the full decision history with rationale, alternatives, and evidence.
+For AI execution, use the lean prompt at `prompts/stickiness-wrapper-prompt.md`.
+
+---
+
+### D1: Thin Wrapper Architecture
+
+**Decision:** Create thin wrapper over existing modules; do NOT merge `interior.py`/`boundary.py`
+
+**Alternatives Considered:**
+- A: Merge `interior.py` and `boundary.py` into unified `stickiness.py`
+- B: Create thin wrapper that delegates to existing modules ✓
+
+**Rationale:**
+- Existing modules have 101 passing tests with well-defined behavior
+- Interior and boundary detection are conceptually different (z-statistics vs tolerance curves)
+- Merging would require extensive refactoring and test migration
+- Thin wrapper achieves API simplification without touching working code
+
+**Evidence:**
+- `tests/test_interior.py`: 45 tests covering all edge cases
+- `tests/test_boundary.py`: 56 tests for boundary detection
+- Both modules independently reviewed and approved
+
+**Failure Mode Avoided:** Breaking existing API consumers who depend on current function signatures
+
+---
+
+### D2: No util.py Extraction
+
+**Decision:** Do NOT extract commonalities to `util.py`
+
+**Alternatives Considered:**
+- A: Create `util.py` with shared validation/array handling code
+- B: Keep existing factorization as-is ✓
+
+**Rationale:**
+- Commonalities already properly factored into `sortedops.py` (O(n) percentile) and `selection.py` (quickselect)
+- Adding util.py would create a fourth extraction layer with unclear boundaries
+- Current structure has clear module responsibilities
+
+**Evidence:**
+- `src/fitqc/sortedops.py`: Single-pass statistics computation
+- `src/fitqc/selection.py`: Quickselect algorithm
+- No duplicated code identified between interior.py and boundary.py
+
+**Failure Mode Avoided:** Over-abstraction leading to scattered, hard-to-follow code
+
+---
+
+### D3: Union Return Type
+
+**Decision:** Return union type `InteriorResult | BoundaryResult`; do NOT create unified `StickinessResult`
+
+**Alternatives Considered:**
+- A: Create unified `StickinessResult` dataclass with all fields
+- B: Return union of existing result types ✓
+
+**Rationale:**
+- `InteriorResult` has spike-related fields (`spike_detected`, `z_x0`, `spike_count`)
+- `BoundaryResult` has tolerance-curve fields (`t_lo_star`, `t_hi_star`, `mass_curve`)
+- These are semantically different; forcing into one type loses type safety
+- Union type preserves domain semantics and mypy checking
+
+**Evidence:**
+- `InteriorResult` fields: `spike_detected`, `z_x0`, `spike_count`, `threshold_z`, `x0`
+- `BoundaryResult` fields: `lower_pileup_detected`, `upper_pileup_detected`, `t_lo_star`, `t_hi_star`, `tol_grid`, `lower_mass_curve`, `upper_mass_curve`
+- No meaningful overlap between field sets
+
+**Failure Mode Avoided:** Loss of type safety and semantic confusion from jamming unrelated fields together
+
+---
+
+### D4: Do Not Wrap compute_z/compute_u
+
+**Decision:** Do NOT wrap `compute_z` or `compute_u` in public API
+
+**Alternatives Considered:**
+- A: Expose `compute_z` and `compute_u` as part of wrapper API
+- B: Keep as implementation details in original modules ✓
+
+**Rationale:**
+- These are intermediate computation functions, not user-facing
+- Users want detection results, not raw statistics
+- Exposing internals increases API surface without user benefit
+- Original modules remain available for advanced users who need raw statistics
+
+**Evidence:**
+- `compute_z`: Called internally by `run_interior_qc`, returns z-statistic
+- `compute_u`: Called internally by `run_boundary_qc`, returns normalized distances
+- No use case identified for calling these directly
+
+**Failure Mode Avoided:** API bloat; users confused about which function to call
+
+---
+
+### D5: Wrapper as Primary API
+
+**Decision:** `detect_stickiness()` is the primary API; existing functions are "advanced"
+
+**Alternatives Considered:**
+- A: Keep existing functions as primary, wrapper as convenience
+- B: Wrapper is primary entry point for new users ✓
+
+**Rationale:**
+- New users shouldn't need to understand interior vs boundary distinction
+- Single entry point reduces cognitive load
+- Advanced users still have direct access to underlying functions
+- Documentation can emphasize wrapper while noting advanced options
+
+**Evidence:**
+- User feedback: "I just want to check if my parameter is sticky"
+- Similar patterns in scikit-learn: `fit_predict()` wraps `fit()` + `predict()`
+
+**Failure Mode Avoided:** New users overwhelmed by having to choose between multiple similar functions
+
+---
+
+### D6: Four Mode Options
+
+**Decision:** Provide four modes: `"interior"`, `"lower"`, `"upper"`, `"all"`
+
+**Alternatives Considered:**
+- A: Only `"interior"` and `"boundary"` (2 modes)
+- B: Only `"all"` (1 mode, always run everything)
+- C: Four modes with granular control ✓
+
+**Rationale:**
+- Users may only care about one type of stickiness
+- Running unnecessary checks wastes computation
+- `"lower"` and `"upper"` allow asymmetric analysis (e.g., parameter only bounded below)
+- `"all"` provides convenience for comprehensive check
+
+**Evidence:**
+- Existing codebase shows separate calls to `run_interior_qc` and `run_boundary_qc`
+- Some parameters have only lower bounds (e.g., variance > 0)
+
+**Failure Mode Avoided:** Forcing users to run unwanted checks; no way to check only one boundary
+
+---
+
+### D7: BoundaryResult Field Handling
+
+**Decision:** `mode="lower"` and `mode="upper"` return `BoundaryResult` with unused fields set to `None`
+
+**Alternatives Considered:**
+- A: Create `LowerBoundaryResult` and `UpperBoundaryResult` types
+- B: Return full `BoundaryResult` with unused fields as `None` ✓
+
+**Rationale:**
+- Avoids proliferation of similar dataclasses
+- Consistent return type for boundary modes simplifies caller code
+- `None` clearly indicates "not computed" vs "computed but no detection"
+- Existing `BoundaryResult` already supports optional fields
+
+**Evidence:**
+- `BoundaryResult` defined with fields that can be None when not applicable
+- Pattern used in scipy.optimize results (some fields None based on options)
+
+**Failure Mode Avoided:** Type explosion; callers needing to handle multiple result types
+
+---
+
+### D8: Scale Parameter Required for Incomplete Bounds
+
+**Decision:** Require `scale` parameter when `L` or `U` is `None`
+
+**Alternatives Considered:**
+- A: Auto-compute scale from data always
+- B: Fail loudly if bounds incomplete and no scale provided ✓
+- C: Use data range as implicit default
+
+**Rationale:**
+- Interior detection normalizes by `max(ref - L, U - ref)` — impossible without bounds
+- Auto-computing from data can give misleading results (data-dependent threshold)
+- Explicit scale forces user to think about appropriate normalization
+- Error message guides user to valid options
+
+**Evidence:**
+- `run_interior_qc` signature requires L and U
+- Auto-scale without user awareness led to false positives in testing
+
+**Failure Mode Avoided:** Silent use of inappropriate scale leading to wrong detection
+
+---
+
+### D9: Scale Options
+
+**Decision:** Scale options: `float | "std" | "iqr" | "range"`
+
+**Alternatives Considered:**
+- A: Only numeric scale
+- B: Only string presets
+- C: Both numeric and string presets ✓
+
+**Rationale:**
+- Numeric allows user to specify domain-specific scale
+- `"std"` useful when data is approximately normal
+- `"iqr"` robust to outliers (matches robust statistics theme)
+- `"range"` useful when full spread is meaningful
+- Covers common use cases while allowing customization
+
+**Evidence:**
+- scipy.stats functions often accept similar scale options
+- IQR used elsewhere in fitqc for robust estimation
+
+**Failure Mode Avoided:** User stuck without good scale option for their use case
+
+---
+
+### D10: Fresh Branch from Main
+
+**Decision:** Create fresh branch from `main`, not from existing feature branches
+
+**Alternatives Considered:**
+- A: Branch from existing development branch
+- B: Fresh branch from main ✓
+
+**Rationale:**
+- Ensures clean diff against production code
+- Avoids inheriting unrelated changes
+- Easier code review
+- Standard practice for new features
+
+**Failure Mode Avoided:** Merge conflicts; review confusion from unrelated changes
+
+---
+
+### D11: Test-First with Non-Trivial Assertions
+
+**Decision:** Write tests first; require non-trivial assertions
+
+**Alternatives Considered:**
+- A: Write implementation first, add tests after
+- B: Test-first development with strict assertion requirements ✓
+
+**Rationale:**
+- Tests clarify expected behavior before implementation
+- Non-trivial assertions catch actual bugs (not just "it runs")
+- Forces thinking through edge cases upfront
+- Approved tests become specification
+
+**Assertion Requirements:**
+- No `assert X is not None` without additional checks
+- Use `np.testing.assert_array_equal` for arrays
+- Use `pytest.approx` for floats
+- Use `pytest.raises` for expected errors
+- Verify type, shape, dtype, and values
+
+**Evidence:**
+- Existing test files follow this pattern
+- Past bugs caught by strict assertions in `test_interior.py`
+
+**Failure Mode Avoided:** Tests that pass but don't verify behavior; implementation bugs slipping through
