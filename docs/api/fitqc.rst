@@ -11,12 +11,12 @@ Submodules
    :toctree: generated/
    :nosignatures:
 
-   ~fitqc.config
-   ~fitqc.interior
-   ~fitqc.boundary
-   ~fitqc.report
-   ~fitqc.plot
-   ~fitqc.synth
-   ~fitqc.precision
-   ~fitqc.selection
-   ~fitqc.sortedops
+   config
+   interior
+   boundary
+   report
+   plot
+   synth
+   precision
+   selection
+   sortedops
