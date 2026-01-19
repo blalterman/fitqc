@@ -64,6 +64,7 @@ class InteriorConfig:
 
     The Algorithm
     -------------
+    **Single-Curve Mode (default):**
     1. Transform x → z = ``|x - x0| / max(x0 - L, U - x0)``, so z=0 at x0
     2. For each eps in logspace(eps_log10_min, eps_log10_max, n_eps):
        - Compute P(z < eps) = "fraction of samples within eps of x0"
@@ -75,6 +76,16 @@ class InteriorConfig:
        - location <= spike_location_max (near z=0, i.e., near x0)
     6. Use elbow detection on the P(z < eps) curve to find eps*
 
+    **Multi-Curve Mode (use_quantile_analysis=True):**
+    When analyzing multiple curves simultaneously (e.g., from different fits),
+    the algorithm computes P(z < eps) for each quantile in quantile_grid.
+    The optimal threshold eps* is then determined by finding the median elbow
+    across all quantiles, providing a more robust estimate.
+
+    - Spike detection remains INDEPENDENT of quantile analysis
+    - Only the threshold estimation (eps*) uses multi-curve median aggregation
+    - Requires min_quantile_agreement fraction of quantiles to have valid elbows
+
     Why These Defaults
     ------------------
     - eps_log10_min=-12: Below float64 precision at most magnitudes
@@ -84,6 +95,9 @@ class InteriorConfig:
     - spike_prominence_min=10: Peak must be 10 counts above background
     - spike_width_max=15: Max 15% of histogram width (100 bins)
     - spike_location_max=0.1: Spike must be within 10% of x0
+    - use_quantile_analysis=False: Opt-in for multi-curve analysis
+    - quantile_grid: Standard quantiles from 0.1% to 10%
+    - min_quantile_agreement=0.5: At least half the quantiles must agree
 
     Critical: Avoiding False Positives
     ----------------------------------
@@ -106,6 +120,13 @@ class InteriorConfig:
     spike_width_max: float = 15.0  # Max width in bins; wider = broad distribution, not spike
     spike_location_max: float = 0.1  # Spike must be in first 10% of z-range (near x0)
 
+    # Multi-curve quantile analysis (opt-in)
+    use_quantile_analysis: bool = False  # Enable multi-curve robust threshold estimation
+    quantile_grid: tuple[float, ...] = field(
+        default_factory=lambda: (0.001, 0.005, 0.01, 0.02, 0.05, 0.10)
+    )  # Quantiles to analyze for threshold detection
+    min_quantile_agreement: float = 0.5  # Minimum fraction of quantiles that must agree
+
 
 @dataclass
 class BoundaryConfig:
@@ -113,24 +134,42 @@ class BoundaryConfig:
 
     The Algorithm
     -------------
+    **Single-Curve Mode (default):**
     1. Transform x → u = (x - L) / (U - L), so u=0 at L, u=1 at U
     2. For lower boundary: compute P(u < tol) for each tol in linspace(tol_min, tol_max, n_tols)
     3. For upper boundary: compute P(u > 1-tol) similarly
-    4. At each quantile in quantile_grid, find the tolerance where that quantile is reached
-    5. Use elbow detection on the (tol, cumulative_fraction) curve to find t_lo*, t_hi*
+    4. Use elbow detection on the (tol, cumulative_fraction) curve to find t_lo*, t_hi*
 
-    Why Quantile Grid?
-    ------------------
-    Instead of just looking at "fraction within tol of boundary", we look at multiple
-    quantiles (1%, 5%, 10%, etc.). This gives multiple curves, each potentially showing
-    an elbow. The most robust elbow across quantiles determines the optimal tolerance.
+    **Multi-Curve Mode (use_quantile_analysis=True):**
+    When analyzing multiple curves simultaneously, the algorithm computes the tolerance
+    at which each quantile in quantile_grid is reached. The optimal threshold is then
+    determined by finding the median elbow across all quantiles, providing a more robust
+    estimate for tight pileups.
+
+    - Median aggregation provides robustness against outlier quantiles
+    - Requires min_quantile_agreement fraction of quantiles to have valid elbows
+    - Particularly useful for very tight pileups (< 0.5% of range)
+
+    Grid Mode Options
+    -----------------
+    **uniform** (default): Linear spacing from tol_min to tol_max
+    - Good for general-purpose detection
+    - Equal resolution across entire tolerance range
+
+    **progressive**: Denser spacing near boundaries, coarser farther out
+    - Better for detecting very tight pileups (< 1% of range)
+    - Concentrates sampling resolution where pileups typically occur
+    - Recommended when you expect tight boundary constraints
 
     Why These Defaults
     ------------------
     - tol_min=0.0: Start from the boundary itself
     - tol_max=0.05: 5% of range; beyond this, we're not really "at the boundary"
     - n_tols=41: Gives 0.125% resolution in tolerance
-    - quantile_grid: Standard quantiles covering tail (1-10%) and body (25-50%)
+    - grid_mode="uniform": Works well for most cases
+    - use_quantile_analysis=False: Opt-in for multi-curve analysis
+    - quantile_grid: Standard quantiles from 0.1% to 10%
+    - min_quantile_agreement=0.5: At least half the quantiles must agree
 
     Interpreting Results
     --------------------
@@ -144,8 +183,15 @@ class BoundaryConfig:
     tol_max: float = 0.05  # 5% of range is max "boundary region"
     n_tols: int = 41  # Number of tolerance values (0.0, 0.00125, ..., 0.05)
 
-    # Quantiles to track for elbow detection
-    quantile_grid: tuple[float, ...] = field(default_factory=lambda: (0.01, 0.05, 0.10, 0.25, 0.50))
+    # Grid mode selection
+    grid_mode: str = "uniform"  # "uniform" or "progressive"
+
+    # Multi-curve quantile analysis (opt-in)
+    use_quantile_analysis: bool = False  # Enable multi-curve robust threshold estimation
+    quantile_grid: tuple[float, ...] = field(
+        default_factory=lambda: (0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.10)
+    )  # Quantiles to analyze for threshold detection
+    min_quantile_agreement: float = 0.5  # Minimum fraction of quantiles that must agree
 
 
 @dataclass
