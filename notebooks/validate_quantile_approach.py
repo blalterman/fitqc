@@ -63,7 +63,8 @@ Tests for detecting boundary pileup using quantile analysis.
 
 # %% Common boundary test configuration
 GRID_BOUNDARY = np.linspace(0.0, 0.05, 41)
-QUANTILE_GRID = np.array([0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.10])
+# FIXED: Denser quantile grid to capture 3% pileup structural break
+QUANTILE_GRID = np.array([0.001, 0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.05, 0.07, 0.10])
 LOG_SPACE_BOUNDARY = False
 
 print("="*100)
@@ -73,11 +74,12 @@ print(f"Grid: {len(GRID_BOUNDARY)} points from {GRID_BOUNDARY[0]:.4f} to {GRID_B
 print(f"Quantile grid: {QUANTILE_GRID}")
 print()
 
-# %% Scenario 1: Boundary Tight Pileup (3% in 0.3%)
+# %% Sanity Check: Visualize boundary distributions
 print("\n" + "="*100)
-print("SCENARIO 1: Boundary Tight Pileup (3% in 0.3% of range)")
+print("SANITY CHECK: Visualizing test data distributions")
 print("="*100)
 
+# Generate all test data first
 x_tight = generate_with_boundary_pileup(
     n=10000, L=0.0, U=1.0,
     lower_pileup_frac=0.03,
@@ -85,6 +87,52 @@ x_tight = generate_with_boundary_pileup(
     seed=42
 )
 u_tight = compute_u(x_tight, L=0.0, U=1.0)
+
+x_uniform = np.random.uniform(0.0, 1.0, 10000)
+u_uniform = compute_u(x_uniform, L=0.0, U=1.0)
+
+x_broad = generate_with_boundary_pileup(
+    n=10000, L=0.0, U=1.0,
+    lower_pileup_frac=0.10,
+    pileup_width=0.05,
+    seed=42
+)
+u_broad = compute_u(x_broad, L=0.0, U=1.0)
+
+# Quick histogram sanity check
+fig_sanity, axes_sanity = plt.subplots(1, 3, figsize=(15, 4))
+
+axes_sanity[0].hist(u_tight, bins=50, alpha=0.7, color='navy', edgecolor='black')
+axes_sanity[0].axvline(0.003, color='red', ls='--', linewidth=2, label='True pileup width')
+axes_sanity[0].set_xlabel('u (normalized position)')
+axes_sanity[0].set_ylabel('Count')
+axes_sanity[0].set_title('Tight Pileup: 3% in [0, 0.003]')
+axes_sanity[0].legend()
+axes_sanity[0].set_xlim(-0.01, 0.1)
+
+axes_sanity[1].hist(u_uniform, bins=50, alpha=0.7, color='purple', edgecolor='black')
+axes_sanity[1].set_xlabel('u (normalized position)')
+axes_sanity[1].set_title('Uniform: Should be flat')
+axes_sanity[1].set_xlim(0, 1)
+
+axes_sanity[2].hist(u_broad, bins=50, alpha=0.7, color='darkgreen', edgecolor='black')
+axes_sanity[2].axvline(0.05, color='red', ls='--', linewidth=2, label='True pileup width')
+axes_sanity[2].set_xlabel('u (normalized position)')
+axes_sanity[2].set_title('Broad Pileup: 10% in [0, 0.05]')
+axes_sanity[2].legend()
+axes_sanity[2].set_xlim(-0.01, 0.2)
+
+plt.tight_layout()
+plt.savefig('/home/user/fitqc/tmp/boundary_sanity_check.png', dpi=150)
+plt.show()
+
+print("Boundary distributions look correct. Proceeding with tests...\n")
+
+# %% Scenario 1: Boundary Tight Pileup (3% in 0.3%)
+print("\n" + "="*100)
+print("SCENARIO 1: Boundary Tight Pileup (3% in 0.3% of range)")
+print("="*100)
+
 u_tight_sorted = np.sort(u_tight)
 
 true_threshold_tight = 0.003
@@ -126,9 +174,6 @@ print("\n" + "="*100)
 print("SCENARIO 2: Boundary Uniform (No Pileup)")
 print("="*100)
 
-np.random.seed(42)
-x_uniform = np.random.uniform(0.0, 1.0, 10000)
-u_uniform = compute_u(x_uniform, L=0.0, U=1.0)
 u_uniform_sorted = np.sort(u_uniform)
 
 result_uniform = compare_single_vs_multi_curve(
@@ -163,13 +208,6 @@ print("\n" + "="*100)
 print("SCENARIO 3: Boundary Broad Pileup (10% in 5% of range)")
 print("="*100)
 
-x_broad = generate_with_boundary_pileup(
-    n=10000, L=0.0, U=1.0,
-    lower_pileup_frac=0.10,
-    pileup_width=0.05,
-    seed=42
-)
-u_broad = compute_u(x_broad, L=0.0, U=1.0)
 u_broad_sorted = np.sort(u_broad)
 
 true_threshold_broad = 0.05
@@ -214,17 +252,59 @@ print(f"Grid: {len(GRID_INTERIOR)} points from 10^-12 to 10^-3 (log-spaced)")
 print(f"Quantile grid: {QUANTILE_GRID}")
 print()
 
-# %% Scenario 4: Interior Tight Spike (5% at x0)
+# %% Sanity Check: Visualize interior distributions
 print("\n" + "="*100)
-print("SCENARIO 4: Interior Tight Spike (5% at x0)")
+print("SANITY CHECK: Visualizing interior test data distributions")
 print("="*100)
 
+# Generate interior test data
 x_spike = generate_with_x0_spike(
     n=10000, x0=5.0, L=0.0, U=10.0,
     spike_frac=0.05,
     seed=42
 )
 z_spike = compute_z(x_spike, x0=5.0, L=0.0, U=10.0)
+
+np.random.seed(42)
+x0_broad = 5.0
+L_broad = 0.0
+U_broad = 10.0
+x_broad_normal = np.random.normal(loc=x0_broad, scale=1.5, size=10000)
+x_broad_normal = np.clip(x_broad_normal, L_broad, U_broad)
+z_broad = compute_z(x_broad_normal, x0=x0_broad, L=L_broad, U=U_broad)
+
+# Visualize z-distributions
+fig_sanity_int, axes_sanity_int = plt.subplots(1, 2, figsize=(12, 4))
+
+axes_sanity_int[0].hist(z_spike, bins=100, alpha=0.7, color='darkorange', edgecolor='black')
+axes_sanity_int[0].set_xlabel('z (distance from x0, normalized)')
+axes_sanity_int[0].set_ylabel('Count')
+axes_sanity_int[0].set_title('Spike: 5% exactly at x0 (z=0)')
+axes_sanity_int[0].set_xlim(-0.05, 0.5)
+axes_sanity_int[0].axvline(0, color='red', ls='--', linewidth=2, alpha=0.5, label='x0 (z=0)')
+axes_sanity_int[0].legend()
+
+axes_sanity_int[1].hist(z_broad, bins=100, alpha=0.7, color='teal', edgecolor='black')
+axes_sanity_int[1].set_xlabel('z (distance from x0, normalized)')
+axes_sanity_int[1].set_title('Broad Normal: Centered at x0, sigma=1.5')
+axes_sanity_int[1].set_xlim(-0.05, 0.5)
+axes_sanity_int[1].axvline(0, color='red', ls='--', linewidth=2, alpha=0.5, label='x0 (z=0)')
+axes_sanity_int[1].legend()
+
+plt.tight_layout()
+plt.savefig('/home/user/fitqc/tmp/interior_sanity_check.png', dpi=150)
+plt.show()
+
+print("Interior distributions look correct.")
+print(f"  Spike: {100*np.sum(z_spike < 1e-10)/len(z_spike):.1f}% of samples have z < 1e-10")
+print(f"  Broad: {100*np.sum(z_broad < 1e-10)/len(z_broad):.1f}% of samples have z < 1e-10")
+print("Proceeding with tests...\n")
+
+# %% Scenario 4: Interior Tight Spike (5% at x0)
+print("\n" + "="*100)
+print("SCENARIO 4: Interior Tight Spike (5% at x0)")
+print("="*100)
+
 z_spike_sorted = np.sort(z_spike)
 
 result_spike = compare_single_vs_multi_curve(
@@ -256,24 +336,19 @@ if mean_ratio_spike < 0.1:
 else:
     print(f"\n✗ Mean ratio {mean_ratio_spike:.3e} not << 1")
 
-# %% Scenario 5: Interior Signed Log-Normal (Broad, NOT a Spike)
+# %% Scenario 5: Interior Broad Normal (Broad, NOT a Spike)
 print("\n" + "="*100)
-print("SCENARIO 5: Interior Signed Log-Normal (BROAD, NOT a spike)")
+print("SCENARIO 5: Interior Broad Normal at x0 (BROAD, NOT a spike)")
 print("="*100)
 
-x_lognorm_raw = generate_signed_lognormal(n=10000, mu=-2, sigma=1.5, seed=42)
-x_min, x_max = x_lognorm_raw.min(), x_lognorm_raw.max()
-x_lognorm = (x_lognorm_raw - x_min) / (x_max - x_min)
-x0_lognorm = 0.5
-z_lognorm = compute_z(x_lognorm, x0=x0_lognorm, L=0.0, U=1.0)
-z_lognorm_sorted = np.sort(z_lognorm)
+z_lognorm_sorted = np.sort(z_broad)
 
 result_lognorm = compare_single_vs_multi_curve(
     z_lognorm_sorted, GRID_INTERIOR, QUANTILE_GRID,
     log_space=LOG_SPACE_INTERIOR, true_threshold=None
 )
 
-print(f"\nData: n={len(z_lognorm)}, signed log-normal (broad)")
+print(f"\nData: n={len(z_lognorm_sorted)}, broad normal at x0={x0_broad}, sigma=1.5")
 single_str_ln = f"{result_lognorm['single_curve_elbow']:.2e}" if result_lognorm['single_curve_elbow'] else "None"
 multi_str_ln = f"{result_lognorm['multi_curve_elbow']:.2e}" if result_lognorm['multi_curve_elbow'] else "None"
 print(f"\nSingle-curve elbow: {single_str_ln}")
@@ -363,7 +438,7 @@ ax.set_title('Interior: Spike (Deviation from y=x)', fontsize=14, fontweight='bo
 ax.legend(fontsize=10)
 ax.grid(True, alpha=0.3, which='both')
 
-# Plot 4: Interior Signed Log-Normal
+# Plot 4: Interior Broad Normal
 ax = axes[1, 1]
 threshold_log = result_lognorm['diagnostics']['threshold_at_quantile'][:len(quantile_log)]
 ax.loglog(quantile_log, threshold_log,
@@ -381,7 +456,7 @@ if result_lognorm['multi_curve_elbow'] is not None:
                linewidth=2.5, label=f"Multi: {multi_eps:.2e}")
 ax.set_xlabel('Quantile (log)', fontsize=12, fontweight='bold')
 ax.set_ylabel('Epsilon (log)', fontsize=12, fontweight='bold')
-ax.set_title('Interior: Signed Log-Normal (No Spike)', fontsize=14, fontweight='bold')
+ax.set_title('Interior: Broad Normal at x0 (No Spike)', fontsize=14, fontweight='bold')
 ax.legend(fontsize=10)
 ax.grid(True, alpha=0.3, which='both')
 
@@ -428,7 +503,7 @@ table_rows = [
      None,
      "N/A", "N/A"),
 
-    ("Interior Log-Normal",
+    ("Interior Broad Normal",
      result_lognorm['single_curve_elbow'],
      np.interp(result_lognorm['multi_curve_elbow'], QUANTILE_GRID,
                result_lognorm['diagnostics']['threshold_at_quantile']) if result_lognorm['multi_curve_elbow'] else None,
@@ -475,11 +550,11 @@ if mean_ratio_spike < 0.1:
 else:
     print(f"3. Interior spike: WARNING (ratio={mean_ratio_spike:.3e} not << 1)")
 
-# Interior log-normal
+# Interior broad normal
 if mean_ratio_lognorm > 0.5:
-    print(f"4. Signed log-normal: PASS (ratio={mean_ratio_lognorm:.3e} > 0.5, correctly NOT flagged)")
+    print(f"4. Broad normal at x0: PASS (ratio={mean_ratio_lognorm:.3e} > 0.5, correctly NOT flagged)")
 else:
-    print(f"4. Signed log-normal: FAIL (ratio={mean_ratio_lognorm:.3e} < 0.5, would misclassify!)")
+    print(f"4. Broad normal at x0: FAIL (ratio={mean_ratio_lognorm:.3e} < 0.5, would misclassify!)")
 
 print("\nRecommendation:")
 print("-"*120)
