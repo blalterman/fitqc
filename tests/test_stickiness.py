@@ -343,6 +343,31 @@ class TestScaleParameter:
 
         np.testing.assert_array_almost_equal(result.mass_curve, direct.mass_curve)
 
+    def test_scale_int_works(self, rng):
+        """scale=int should work the same as scale=float.
+
+        The implementation accepts both int and float for the scale parameter.
+        An integer scale is converted to float internally.
+        """
+        from fitqc.stickiness import detect_stickiness
+
+        x = rng.normal(5.0, 2.0, size=1000)
+        scale_int = 3  # int, not float
+
+        result = detect_stickiness(
+            x, ref=5.0, L=None, U=None, mode="interior", scale=scale_int
+        )
+
+        # Should produce valid InteriorResult
+        assert isinstance(result, InteriorResult)
+        assert result.eps_grid.dtype == np.float64
+
+        # Compare with float version - should be identical
+        result_float = detect_stickiness(
+            x, ref=5.0, L=None, U=None, mode="interior", scale=3.0
+        )
+        np.testing.assert_array_equal(result.mass_curve, result_float.mass_curve)
+
     def test_scale_std_works(self, rng):
         """scale='std' uses standard deviation as normalization scale.
 
@@ -458,6 +483,43 @@ class TestScaleParameter:
         np.testing.assert_array_equal(
             result_with_scale.eps_grid, result_without_scale.eps_grid
         )
+
+    def test_invalid_scale_ignored_when_bounds_complete(self, uniform_data):
+        """Invalid scale values are ignored (with warning) when bounds are complete.
+
+        When both L and U are provided, the scale parameter is not used.
+        Even invalid values like 0.0 or negative numbers should be ignored
+        rather than raising an error, since the scale is never actually used.
+        """
+        from fitqc.stickiness import detect_stickiness
+
+        # scale=0.0 would error if used, but should be ignored when bounds complete
+        with pytest.warns(UserWarning, match=r"scale.*ignored.*bounds"):
+            result_zero = detect_stickiness(
+                uniform_data, ref=5.0, L=0.0, U=10.0, mode="interior", scale=0.0
+            )
+
+        # scale=-1.0 would also error if used
+        with pytest.warns(UserWarning, match=r"scale.*ignored.*bounds"):
+            result_negative = detect_stickiness(
+                uniform_data, ref=5.0, L=0.0, U=10.0, mode="interior", scale=-1.0
+            )
+
+        # Both should produce valid results identical to no-scale call
+        assert isinstance(result_zero, InteriorResult)
+        assert isinstance(result_negative, InteriorResult)
+
+        # Compare with no-scale call
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            result_none = detect_stickiness(
+                uniform_data, ref=5.0, L=0.0, U=10.0, mode="interior", scale=None
+            )
+
+        np.testing.assert_array_equal(result_zero.mass_curve, result_none.mass_curve)
+        np.testing.assert_array_equal(result_negative.mass_curve, result_none.mass_curve)
 
     def test_scale_methods_produce_different_results(self, rng):
         """Different scale methods compute different values and produce different results.
@@ -892,7 +954,13 @@ class TestEdgeCases:
         assert result.spike_detected is True
 
     def test_ref_at_lower_bound(self, rng):
-        """Should handle ref at lower bound."""
+        """Should handle ref at lower bound.
+
+        When ref=L=0.0, the scale computation becomes:
+            max(ref - L, U - ref) = max(0 - 0, 10 - 0) = max(0, 10) = 10
+
+        This tests the edge case where one side of the max() is zero.
+        """
         from fitqc.stickiness import detect_stickiness
 
         x = rng.uniform(0, 10, size=1000)
@@ -902,8 +970,18 @@ class TestEdgeCases:
         assert isinstance(result, InteriorResult)
         assert result.eps_grid.dtype == np.float64
 
+        # Verify result matches direct call (scale should be 10)
+        direct = run_interior_qc(x, x0=0.0, L=0.0, U=10.0)
+        np.testing.assert_array_equal(result.mass_curve, direct.mass_curve)
+
     def test_ref_at_upper_bound(self, rng):
-        """Should handle ref at upper bound."""
+        """Should handle ref at upper bound.
+
+        When ref=U=10.0, the scale computation becomes:
+            max(ref - L, U - ref) = max(10 - 0, 10 - 10) = max(10, 0) = 10
+
+        This tests the edge case where one side of the max() is zero.
+        """
         from fitqc.stickiness import detect_stickiness
 
         x = rng.uniform(0, 10, size=1000)
@@ -913,8 +991,18 @@ class TestEdgeCases:
         assert isinstance(result, InteriorResult)
         assert result.eps_grid.dtype == np.float64
 
+        # Verify result matches direct call (scale should be 10)
+        direct = run_interior_qc(x, x0=10.0, L=0.0, U=10.0)
+        np.testing.assert_array_equal(result.mass_curve, direct.mass_curve)
+
     def test_symmetric_bounds(self, rng):
-        """Should handle symmetric bounds around ref."""
+        """Should handle symmetric bounds around ref.
+
+        When ref is centered between L and U:
+            max(ref - L, U - ref) = max(0 - (-10), 10 - 0) = max(10, 10) = 10
+
+        Both sides of the max() are equal.
+        """
         from fitqc.stickiness import detect_stickiness
 
         x = rng.uniform(-10, 10, size=1000)
@@ -922,24 +1010,39 @@ class TestEdgeCases:
         result = detect_stickiness(x, ref=0.0, L=-10.0, U=10.0, mode="interior")
 
         assert isinstance(result, InteriorResult)
-        # With symmetric bounds, max(ref-L, U-ref) = 10
         assert result.eps_grid.dtype == np.float64
 
+        # Verify result matches direct call
+        direct = run_interior_qc(x, x0=0.0, L=-10.0, U=10.0)
+        np.testing.assert_array_equal(result.mass_curve, direct.mass_curve)
+
     def test_asymmetric_bounds(self, rng):
-        """Should handle asymmetric bounds (ref closer to one bound)."""
+        """Should handle asymmetric bounds (ref closer to one bound).
+
+        When ref=2.0 is closer to L=0.0 than to U=10.0:
+            max(ref - L, U - ref) = max(2 - 0, 10 - 2) = max(2, 8) = 8
+
+        The larger distance (to U) determines the scale.
+        """
         from fitqc.stickiness import detect_stickiness
 
         x = rng.uniform(0, 10, size=1000)
 
-        # ref=2.0 is closer to L=0.0 than to U=10.0
         result = detect_stickiness(x, ref=2.0, L=0.0, U=10.0, mode="interior")
 
         assert isinstance(result, InteriorResult)
-        # max(2-0, 10-2) = max(2, 8) = 8
         assert result.eps_grid.dtype == np.float64
 
+        # Verify result matches direct call (scale should be 8)
+        direct = run_interior_qc(x, x0=2.0, L=0.0, U=10.0)
+        np.testing.assert_array_equal(result.mass_curve, direct.mass_curve)
+
     def test_lower_mode_with_U_none(self, rng):
-        """mode='lower' should work when U is None."""
+        """mode='lower' should work when U is None.
+
+        When U is not provided, mode='lower' should still function correctly,
+        computing lower boundary detection while nulling upper fields.
+        """
         from fitqc.stickiness import detect_stickiness
 
         x = rng.uniform(0, 10, size=1000)
@@ -947,12 +1050,22 @@ class TestEdgeCases:
         result = detect_stickiness(x, ref=5.0, L=0.0, U=None, mode="lower")
 
         assert isinstance(result, BoundaryResult)
-        assert result.lower_pileup_detected is not None
+        # Lower fields should be properly populated
+        assert isinstance(result.lower_pileup_detected, bool)
+        assert isinstance(result.tol_grid, np.ndarray)
+        assert result.tol_grid.shape[0] > 0
+        assert isinstance(result.lower_mass_curve, np.ndarray)
+        # Upper fields should be nulled
         assert result.upper_pileup_detected is False
+        assert result.t_hi_star is None
         assert result.upper_mass_curve is None
 
     def test_upper_mode_with_L_none(self, rng):
-        """mode='upper' should work when L is None."""
+        """mode='upper' should work when L is None.
+
+        When L is not provided, mode='upper' should still function correctly,
+        computing upper boundary detection while nulling lower fields.
+        """
         from fitqc.stickiness import detect_stickiness
 
         x = rng.uniform(0, 10, size=1000)
@@ -960,35 +1073,85 @@ class TestEdgeCases:
         result = detect_stickiness(x, ref=5.0, L=None, U=10.0, mode="upper")
 
         assert isinstance(result, BoundaryResult)
-        assert result.upper_pileup_detected is not None
+        # Upper fields should be properly populated
+        assert isinstance(result.upper_pileup_detected, bool)
+        assert isinstance(result.tol_grid, np.ndarray)
+        assert result.tol_grid.shape[0] > 0
+        assert isinstance(result.upper_mass_curve, np.ndarray)
+        # Lower fields should be nulled
         assert result.lower_pileup_detected is False
+        assert result.t_lo_star is None
         assert result.lower_mass_curve is None
 
     def test_all_mode_with_only_L(self, rng):
-        """mode='all' with only L should use scale for interior."""
+        """mode='all' with only L should use scale for interior.
+
+        When U is None:
+        - Interior check uses scale parameter for effective bounds
+        - Boundary check can only compute lower boundary detection
+        - Upper boundary fields should be handled gracefully
+        """
         from fitqc.stickiness import detect_stickiness
 
         x = rng.uniform(0, 10, size=1000)
+        expected_scale = float(np.std(x))
 
         interior, boundary = detect_stickiness(
             x, ref=5.0, L=0.0, U=None, mode="all", scale="std"
         )
 
+        # Interior should use scale-derived bounds
         assert isinstance(interior, InteriorResult)
+        assert isinstance(interior.spike_detected, bool)
+        assert interior.eps_grid.dtype == np.float64
+
+        # Verify interior used the correct scale by comparing with direct call
+        effective_L = 5.0 - expected_scale
+        effective_U = 5.0 + expected_scale
+        direct_interior = run_interior_qc(x, x0=5.0, L=effective_L, U=effective_U)
+        np.testing.assert_array_almost_equal(
+            interior.mass_curve, direct_interior.mass_curve
+        )
+
+        # Boundary should have lower fields populated
         assert isinstance(boundary, BoundaryResult)
+        assert isinstance(boundary.lower_pileup_detected, bool)
+        assert isinstance(boundary.lower_mass_curve, np.ndarray)
 
     def test_all_mode_with_only_U(self, rng):
-        """mode='all' with only U should use scale for interior."""
+        """mode='all' with only U should use scale for interior.
+
+        When L is None:
+        - Interior check uses scale parameter for effective bounds
+        - Boundary check can only compute upper boundary detection
+        - Lower boundary fields should be handled gracefully
+        """
         from fitqc.stickiness import detect_stickiness
 
         x = rng.uniform(0, 10, size=1000)
+        expected_scale = float(np.std(x))
 
         interior, boundary = detect_stickiness(
             x, ref=5.0, L=None, U=10.0, mode="all", scale="std"
         )
 
+        # Interior should use scale-derived bounds
         assert isinstance(interior, InteriorResult)
+        assert isinstance(interior.spike_detected, bool)
+        assert interior.eps_grid.dtype == np.float64
+
+        # Verify interior used the correct scale by comparing with direct call
+        effective_L = 5.0 - expected_scale
+        effective_U = 5.0 + expected_scale
+        direct_interior = run_interior_qc(x, x0=5.0, L=effective_L, U=effective_U)
+        np.testing.assert_array_almost_equal(
+            interior.mass_curve, direct_interior.mass_curve
+        )
+
+        # Boundary should have upper fields populated
         assert isinstance(boundary, BoundaryResult)
+        assert isinstance(boundary.upper_pileup_detected, bool)
+        assert isinstance(boundary.upper_mass_curve, np.ndarray)
 
     def test_constant_data_scale_raises(self):
         """Constant data with data-driven scale should raise."""
