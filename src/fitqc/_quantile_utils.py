@@ -8,8 +8,7 @@ import numpy as np
 
 
 def _aggregate_elbows_median(
-    elbows: list[float | None],
-    min_agreement_frac: float = 0.5
+    elbows: list[float | None], min_agreement_frac: float = 0.5
 ) -> float | None:
     """Aggregate multiple elbow estimates via median.
 

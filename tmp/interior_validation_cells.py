@@ -18,8 +18,9 @@ than the quantile (mass is concentrated). For broad distributions, ratios should
 # %% Imports and setup
 import numpy as np
 import sys
-sys.path.append('../tmp')
-sys.path.append('../src')
+
+sys.path.append("../tmp")
+sys.path.append("../src")
 
 from fitqc.synth import generate_with_x0_spike, generate_signed_lognormal
 from fitqc.interior import compute_z
@@ -39,34 +40,33 @@ print("=" * 80)
 print("SCENARIO 1: TIGHT SPIKE (5% at x0)")
 print("=" * 80)
 
-x_spike = generate_with_x0_spike(
-    n=10000, x0=5.0, L=0.0, U=10.0,
-    spike_frac=0.05,
-    seed=42
-)
+x_spike = generate_with_x0_spike(n=10000, x0=5.0, L=0.0, U=10.0, spike_frac=0.05, seed=42)
 z_spike = compute_z(x_spike, x0=5.0, L=0.0, U=10.0)
 z_spike_sorted = np.sort(z_spike)
 
 result_spike = compare_single_vs_multi_curve(
-    z_spike_sorted, grid_log, quantile_grid,
-    log_space=True, true_threshold=None
+    z_spike_sorted, grid_log, quantile_grid, log_space=True, true_threshold=None
 )
 
 print("\nRESULTS:")
-print(f"  Single-curve elbow: {result_spike['single_curve_elbow']:.2e if result_spike['single_curve_elbow'] else None}")
-print(f"  Multi-curve elbow: {result_spike['multi_curve_elbow']:.2e if result_spike['multi_curve_elbow'] else None}")
+print(
+    f"  Single-curve elbow: {result_spike['single_curve_elbow']:.2e if result_spike['single_curve_elbow'] else None}"
+)
+print(
+    f"  Multi-curve elbow: {result_spike['multi_curve_elbow']:.2e if result_spike['multi_curve_elbow'] else None}"
+)
 
 print("\n  Quantile ratios (should be << 1 for tight spike):")
-for q, r in zip(quantile_grid, result_spike['quantile_ratios']):
+for q, r in zip(quantile_grid, result_spike["quantile_ratios"]):
     print(f"    q={q:.3f}: ratio={r:.3e}")
 
 print("\nINTERPRETATION:")
-if result_spike['multi_curve_elbow'] is not None:
+if result_spike["multi_curve_elbow"] is not None:
     # Find the threshold at the elbow quantile
     elbow_threshold = np.interp(
-        result_spike['multi_curve_elbow'],
+        result_spike["multi_curve_elbow"],
         quantile_grid,
-        result_spike['diagnostics']['threshold_at_quantile']
+        result_spike["diagnostics"]["threshold_at_quantile"],
     )
     print(f"  ✓ Elbow detected at quantile {result_spike['multi_curve_elbow']:.4f}")
     print(f"    -> Corresponding z-threshold: {elbow_threshold:.2e}")
@@ -75,7 +75,7 @@ else:
     print("  ✗ No elbow detected (unexpected for tight spike)")
 
 # Check ratios
-mean_ratio = np.nanmean(result_spike['quantile_ratios'])
+mean_ratio = np.nanmean(result_spike["quantile_ratios"])
 if mean_ratio < 0.1:
     print(f"  ✓ Mean ratio {mean_ratio:.3e} << 1 confirms tight spike")
 else:
@@ -105,33 +105,36 @@ z_lognorm = compute_z(x_lognorm, x0=x0_lognorm, L=0.0, U=1.0)
 z_lognorm_sorted = np.sort(z_lognorm)
 
 result_lognorm = compare_single_vs_multi_curve(
-    z_lognorm_sorted, grid_log, quantile_grid,
-    log_space=True, true_threshold=None
+    z_lognorm_sorted, grid_log, quantile_grid, log_space=True, true_threshold=None
 )
 
 print("\nRESULTS:")
-print(f"  Single-curve elbow: {result_lognorm['single_curve_elbow']:.2e if result_lognorm['single_curve_elbow'] else None}")
-print(f"  Multi-curve elbow: {result_lognorm['multi_curve_elbow']:.2e if result_lognorm['multi_curve_elbow'] else None}")
+print(
+    f"  Single-curve elbow: {result_lognorm['single_curve_elbow']:.2e if result_lognorm['single_curve_elbow'] else None}"
+)
+print(
+    f"  Multi-curve elbow: {result_lognorm['multi_curve_elbow']:.2e if result_lognorm['multi_curve_elbow'] else None}"
+)
 
 print("\n  Quantile ratios (should be > 0.5 for broad distribution, not << 1):")
-for q, r in zip(quantile_grid, result_lognorm['quantile_ratios']):
+for q, r in zip(quantile_grid, result_lognorm["quantile_ratios"]):
     print(f"    q={q:.3f}: ratio={r:.3e}")
 
 print("\nINTERPRETATION:")
-if result_lognorm['multi_curve_elbow'] is None:
+if result_lognorm["multi_curve_elbow"] is None:
     print("  ✓ No elbow detected - correct for broad distribution")
 else:
     elbow_threshold = np.interp(
-        result_lognorm['multi_curve_elbow'],
+        result_lognorm["multi_curve_elbow"],
         quantile_grid,
-        result_lognorm['diagnostics']['threshold_at_quantile']
+        result_lognorm["diagnostics"]["threshold_at_quantile"],
     )
     print(f"  ! Elbow detected at quantile {result_lognorm['multi_curve_elbow']:.4f}")
     print(f"    -> Corresponding z-threshold: {elbow_threshold:.2e}")
     print("    This may indicate weak structure, but check ratios...")
 
 # Check ratios - key diagnostic
-mean_ratio = np.nanmean(result_lognorm['quantile_ratios'])
+mean_ratio = np.nanmean(result_lognorm["quantile_ratios"])
 if mean_ratio > 0.5:
     print(f"  ✓ Mean ratio {mean_ratio:.3e} > 0.5 confirms BROAD distribution")
     print("    -> NOT a tight spike (correct - should not flag as stickiness)")
@@ -139,7 +142,7 @@ else:
     print(f"  ✗ Mean ratio {mean_ratio:.3e} < 0.5 (would be misclassified as spike!)")
 
 # Additional diagnostic: Check mass distribution
-mass_at_smallest_eps = result_lognorm['mass_curve'][0]
+mass_at_smallest_eps = result_lognorm["mass_curve"][0]
 print(f"\n  Mass at smallest epsilon ({grid_log[0]:.2e}): {mass_at_smallest_eps:.4f}")
 if mass_at_smallest_eps < 0.01:
     print("    ✓ Very little mass at tiny epsilon - confirms BROAD, not spike")
@@ -180,30 +183,33 @@ z_precision = compute_z(x_precision, x0=x0_precision, L=0.0, U=10.0)
 z_precision_sorted = np.sort(z_precision)
 
 result_precision = compare_single_vs_multi_curve(
-    z_precision_sorted, grid_log, quantile_grid,
-    log_space=True, true_threshold=None
+    z_precision_sorted, grid_log, quantile_grid, log_space=True, true_threshold=None
 )
 
 print("\nRESULTS:")
-print(f"  Single-curve elbow: {result_precision['single_curve_elbow']:.2e if result_precision['single_curve_elbow'] else None}")
-print(f"  Multi-curve elbow: {result_precision['multi_curve_elbow']:.2e if result_precision['multi_curve_elbow'] else None}")
+print(
+    f"  Single-curve elbow: {result_precision['single_curve_elbow']:.2e if result_precision['single_curve_elbow'] else None}"
+)
+print(
+    f"  Multi-curve elbow: {result_precision['multi_curve_elbow']:.2e if result_precision['multi_curve_elbow'] else None}"
+)
 
 print("\n  Quantile ratios (should be << 0.001 for precision-limited spike):")
-for q, r in zip(quantile_grid, result_precision['quantile_ratios']):
+for q, r in zip(quantile_grid, result_precision["quantile_ratios"]):
     print(f"    q={q:.3f}: ratio={r:.3e}")
 
 print("\nINTERPRETATION:")
-if result_precision['multi_curve_elbow'] is not None:
+if result_precision["multi_curve_elbow"] is not None:
     elbow_threshold = np.interp(
-        result_precision['multi_curve_elbow'],
+        result_precision["multi_curve_elbow"],
         quantile_grid,
-        result_precision['diagnostics']['threshold_at_quantile']
+        result_precision["diagnostics"]["threshold_at_quantile"],
     )
     print(f"  ✓ Elbow detected at quantile {result_precision['multi_curve_elbow']:.4f}")
     print(f"    -> Corresponding z-threshold: {elbow_threshold:.2e}")
 
     # Check if elbow quantile is near the spike fraction
-    if abs(result_precision['multi_curve_elbow'] - spike_frac) < 0.02:
+    if abs(result_precision["multi_curve_elbow"] - spike_frac) < 0.02:
         print(f"  ✓ Elbow quantile ≈ spike fraction ({spike_frac:.2%})")
     else:
         print(f"  ! Elbow quantile differs from spike fraction ({spike_frac:.2%})")
@@ -211,7 +217,7 @@ else:
     print("  ✗ No elbow detected (unexpected for precision-limited spike)")
 
 # Check ratios
-mean_ratio = np.nanmean(result_precision['quantile_ratios'])
+mean_ratio = np.nanmean(result_precision["quantile_ratios"])
 if mean_ratio < 0.001:
     print(f"  ✓ Mean ratio {mean_ratio:.3e} << 0.001 confirms VERY tight spike")
     print("    -> Spike width is near machine precision")
@@ -222,7 +228,9 @@ else:
 
 # Check exact zeros
 n_exact_zeros = np.sum(z_precision == 0)
-print(f"\n  Exact zeros in z-space: {n_exact_zeros} / {n_total} ({100*n_exact_zeros/n_total:.1f}%)")
+print(
+    f"\n  Exact zeros in z-space: {n_exact_zeros} / {n_total} ({100 * n_exact_zeros / n_total:.1f}%)"
+)
 if n_exact_zeros == n_spike:
     print("    ✓ All spike samples have z = 0 (perfect precision)")
 else:
@@ -236,17 +244,17 @@ print("=" * 80)
 scenarios = [
     ("Tight Spike (5%)", result_spike),
     ("Signed Log-Normal", result_lognorm),
-    ("Precision Spike (3%)", result_precision)
+    ("Precision Spike (3%)", result_precision),
 ]
 
-print("\n{:<25} {:>15} {:>15} {:>15}".format(
-    "Scenario", "Single Elbow", "Multi Elbow", "Mean Ratio"
-))
+print(
+    "\n{:<25} {:>15} {:>15} {:>15}".format("Scenario", "Single Elbow", "Multi Elbow", "Mean Ratio")
+)
 print("-" * 72)
 
 for name, result in scenarios:
-    single = f"{result['single_curve_elbow']:.2e}" if result['single_curve_elbow'] else "None"
-    multi = f"{result['multi_curve_elbow']:.2e}" if result['multi_curve_elbow'] else "None"
+    single = f"{result['single_curve_elbow']:.2e}" if result["single_curve_elbow"] else "None"
+    multi = f"{result['multi_curve_elbow']:.2e}" if result["multi_curve_elbow"] else "None"
     ratio = f"{np.nanmean(result['quantile_ratios']):.3e}"
     print(f"{name:<25} {single:>15} {multi:>15} {ratio:>15}")
 

@@ -18,7 +18,6 @@ class TestPlotEcdfToleranceSmoke:
         assert isinstance(fig, plt.Figure)
         plt.close(fig)
 
-
     def test_colorbar_present(self):
         """Test that colorbar is present at right edge."""
         u = np.random.uniform(0, 1, 1000)
@@ -79,7 +78,9 @@ class TestPlotEcdfToleranceDataDriven:
             if idx < len(y_data):
                 y_actual = y_data[idx]
                 # Allow 1% tolerance for statistical variation
-                assert abs(y_actual - x_val) < 0.01, f"At x={x_val}, ECDF={y_actual}, expected ~{x_val}"
+                assert abs(y_actual - x_val) < 0.01, (
+                    f"At x={x_val}, ECDF={y_actual}, expected ~{x_val}"
+                )
 
         plt.close(fig)
 

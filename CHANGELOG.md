@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (Quantile-Visualization Integration)
+- Merged quantile-based detection (algorithm branch) with tolerance-overlay visualizations (viz branch)
+- `plot_quantile_elbow_overlay()` function for visualizing multi-curve quantile elbow thresholds
+  - Accepts `InteriorResult` or `BoundaryResult` with `quantile_elbows` data
+  - For interior results: single panel showing quantile vs epsilon threshold relationship (log scale)
+  - For boundary results: two panels for lower and upper boundary tolerance thresholds
+  - Respects `PlotConfig` settings (colormap, DPI, figsize)
+  - Handles edge cases: `None` elbows, empty dicts, partial `None` values, single quantile
+- New test file `tests/test_plot_quantile_elbow_overlay.py` with comprehensive unit tests
+- New test file `tests/test_integration_quantile_viz.py` with end-to-end integration tests
+  - `TestQuantileResultsAvailableForPlotting`: Verifies `quantile_elbows` field population
+  - `TestQuantileVisualizationIntegration`: Verifies `plot_quantile_elbow_overlay` correctness
+  - `TestCombinedPipeline`: End-to-end tests from data generation to visualization
+  - `TestQuantileElbowsDataIntegrity`: Data validation tests for `quantile_elbows` field
+- Exported `plot_quantile_elbow_overlay` from `fitqc.__init__` for public API access
+
 ### Added
 - Multi-curve quantile-based threshold detection for boundary and interior stickiness
 - Progressive tolerance grid for boundary detection (denser near boundaries)

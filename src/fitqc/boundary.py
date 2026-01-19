@@ -127,14 +127,18 @@ def _build_tolerance_grid(config: BoundaryConfig) -> NDArray[np.floating]:
         # Some stickiness extends to [0.001, 0.005] (0.1-0.5%)
         # Broad pileups can reach [0.005, 0.02] (0.5-2%)
         # Beyond 0.02 (2%) is rarely stickiness
-        return np.concatenate([
-            np.linspace(0.0000, 0.0010, 11),      # [0, 0.1%]:   11 points, 0.01% spacing
-            np.linspace(0.0010, 0.0050, 17)[1:],  # [0.1%, 0.5%]: 16 points, 0.025% spacing
-            np.linspace(0.0050, 0.0200, 13)[1:],  # [0.5%, 2%]:   12 points, 0.125% spacing
-            np.linspace(0.0200, 0.0500, 7)[1:],   # [2%, 5%]:      6 points, 0.75% spacing
-        ])
+        return np.concatenate(
+            [
+                np.linspace(0.0000, 0.0010, 11),  # [0, 0.1%]:   11 points, 0.01% spacing
+                np.linspace(0.0010, 0.0050, 17)[1:],  # [0.1%, 0.5%]: 16 points, 0.025% spacing
+                np.linspace(0.0050, 0.0200, 13)[1:],  # [0.5%, 2%]:   12 points, 0.125% spacing
+                np.linspace(0.0200, 0.0500, 7)[1:],  # [2%, 5%]:      6 points, 0.75% spacing
+            ]
+        )
     else:
-        raise ValueError(f"Unknown grid_mode: {config.grid_mode}. Must be 'uniform' or 'progressive'.")
+        raise ValueError(
+            f"Unknown grid_mode: {config.grid_mode}. Must be 'uniform' or 'progressive'."
+        )
 
 
 def _compute_quantile_curves_boundary(
@@ -194,10 +198,7 @@ def _compute_quantile_curves_boundary(
     #                  then tolerance ≈ quantile (back to uniform)
     # The elbow is where this transition occurs
     elbow_overall = select_elbow(
-        quantile_grid,
-        tol_at_quantile,
-        curve="concave",
-        direction="increasing"
+        quantile_grid, tol_at_quantile, curve="concave", direction="increasing"
     )
 
     # Return list with single elbow (will be aggregated across lower/upper boundaries)
@@ -207,8 +208,7 @@ def _compute_quantile_curves_boundary(
 
 
 def _aggregate_elbows_median(
-    elbows: list[float | None],
-    min_agreement_frac: float = 0.5
+    elbows: list[float | None], min_agreement_frac: float = 0.5
 ) -> float | None:
     """Aggregate multiple elbow estimates via median.
 
@@ -374,8 +374,12 @@ def run_boundary_qc(
 
         # Store quantile elbows for diagnostics
         quantile_elbows_result = {
-            "lower": {float(q): float(tol) for q, tol in zip(quantile_grid_arr, tol_at_quantile_lower)},
-            "upper": {float(q): float(tol) for q, tol in zip(quantile_grid_arr, tol_at_quantile_upper)}
+            "lower": {
+                float(q): float(tol) for q, tol in zip(quantile_grid_arr, tol_at_quantile_lower)
+            },
+            "upper": {
+                float(q): float(tol) for q, tol in zip(quantile_grid_arr, tol_at_quantile_upper)
+            },
         }
     else:
         # Single-curve elbow detection (original method)
@@ -389,8 +393,12 @@ def run_boundary_qc(
             elbow_lower_mass = lower_mass_curve
             elbow_upper_mass = upper_mass_curve
 
-        t_lo_raw = select_elbow(elbow_tols, elbow_lower_mass, curve="concave", direction="increasing")
-        t_hi_raw = select_elbow(elbow_tols, elbow_upper_mass, curve="concave", direction="increasing")
+        t_lo_raw = select_elbow(
+            elbow_tols, elbow_lower_mass, curve="concave", direction="increasing"
+        )
+        t_hi_raw = select_elbow(
+            elbow_tols, elbow_upper_mass, curve="concave", direction="increasing"
+        )
 
     # Detect pileup based on whether elbow shows excess mass
     # For uniform data, we expect P(u < tol) ≈ tol

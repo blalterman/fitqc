@@ -11,12 +11,13 @@ Key Design Decisions:
 - Include log-scale panels when appropriate for multi-scale data
 """
 
+from typing import Literal
+
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import Normalize
 from matplotlib.figure import Figure
-from typing import Literal
 
 from fitqc.boundary import BoundaryResult
 from fitqc.config import PlotConfig
@@ -620,6 +621,7 @@ def plot_ecdf_tolerance_overlays(
 
     return fig
 
+
 def plot_histogram_tolerance_overlays(
     x: np.ndarray,
     L: float,
@@ -743,3 +745,288 @@ def plot_histogram_tolerance_overlays(
     fig.subplots_adjust(right=0.9)
 
     return fig
+
+
+def plot_quantile_elbow_overlay(
+    result: InteriorResult | BoundaryResult,
+    config: PlotConfig | None = None,
+) -> Figure:
+    """Plot quantile elbow thresholds from multi-curve detection results.
+
+    Visualizes the relationship between quantile levels and their detected elbow
+    thresholds, providing insight into the multi-curve threshold estimation used
+    in quantile-based stickiness detection.
+
+    For InteriorResult:
+        - X-axis: Quantile values (e.g., 0.001, 0.01, 0.05)
+        - Y-axis: Detected epsilon thresholds (log scale)
+        - Single panel showing quantile vs eps relationship
+
+    For BoundaryResult:
+        - Two panels: one for lower boundary, one for upper boundary
+        - X-axis: Quantile values
+        - Y-axis: Detected tolerance thresholds
+
+    Args:
+        result: InteriorResult or BoundaryResult from QC analysis.
+            Must have quantile_elbows field (from use_quantile_analysis=True).
+        config: PlotConfig for styling. Uses defaults if None.
+
+    Returns:
+        matplotlib Figure object. Caller is responsible for displaying or saving.
+
+    Note:
+        If result.quantile_elbows is None or empty, returns a figure with a
+        message indicating no quantile data is available.
+
+    Example:
+        >>> from fitqc import run_interior_qc, InteriorConfig, PlotConfig
+        >>> from fitqc.plot import plot_quantile_elbow_overlay
+        >>>
+        >>> config = InteriorConfig(use_quantile_analysis=True)
+        >>> result = run_interior_qc(x, x0=0.5, L=0.0, U=1.0, config=config)
+        >>> fig = plot_quantile_elbow_overlay(result, PlotConfig())
+        >>> fig.savefig("quantile_elbows.png")
+    """
+    # Set default config
+    if config is None:
+        config = PlotConfig()
+
+    # Determine result type and extract quantile_elbows
+    is_boundary = isinstance(result, BoundaryResult)
+
+    # Handle None or empty quantile_elbows
+    if result.quantile_elbows is None:
+        return _plot_no_quantile_data(config, is_boundary)
+
+    if isinstance(result.quantile_elbows, dict) and len(result.quantile_elbows) == 0:
+        return _plot_no_quantile_data(config, is_boundary)
+
+    # Create figure based on result type
+    if is_boundary:
+        return _plot_boundary_quantile_elbows(result, config)
+    else:
+        return _plot_interior_quantile_elbows(result, config)
+
+
+def _plot_no_quantile_data(config: PlotConfig, is_boundary: bool) -> Figure:
+    """Create a placeholder figure when no quantile data is available."""
+    fig, ax = plt.subplots(1, 1, figsize=config.figsize_tolerance, dpi=config.dpi)
+
+    ax.text(
+        0.5,
+        0.5,
+        "No quantile elbow data available.\n\n"
+        "Enable quantile analysis with:\n"
+        "config = InteriorConfig(use_quantile_analysis=True)"
+        if not is_boundary
+        else "config = BoundaryConfig(use_quantile_analysis=True)",
+        ha="center",
+        va="center",
+        fontsize=12,
+        transform=ax.transAxes,
+        bbox={"boxstyle": "round", "facecolor": "wheat", "alpha": 0.5},
+    )
+
+    ax.set_xlabel("Quantile")
+    ax.set_ylabel("Elbow Threshold")
+    ax.set_title("Quantile Elbow Analysis")
+
+    fig.tight_layout()
+    return fig
+
+
+def _plot_interior_quantile_elbows(result: InteriorResult, config: PlotConfig) -> Figure:
+    """Plot quantile elbows for interior (x0 stickiness) results."""
+    fig, ax = plt.subplots(1, 1, figsize=config.figsize_tolerance, dpi=config.dpi)
+
+    cmap = plt.get_cmap(config.cmap)
+    quantile_elbows = result.quantile_elbows
+
+    # Filter valid (non-None) elbows and sort by quantile
+    valid_elbows = {q: e for q, e in quantile_elbows.items() if e is not None}
+    sorted_quantiles = sorted(valid_elbows.keys())
+
+    if len(sorted_quantiles) == 0:
+        # No valid elbows, show message
+        ax.text(
+            0.5,
+            0.5,
+            "No valid elbow thresholds detected.\nAll quantiles returned None.",
+            ha="center",
+            va="center",
+            fontsize=12,
+            transform=ax.transAxes,
+        )
+        ax.set_xlabel("Quantile")
+        ax.set_ylabel("Epsilon (elbow threshold)")
+        ax.set_title("Quantile Elbow Analysis - Interior")
+        fig.tight_layout()
+        return fig
+
+    # Extract data for plotting
+    x_vals = np.array(sorted_quantiles)
+    y_vals = np.array([valid_elbows[q] for q in sorted_quantiles])
+
+    # Create color normalization
+    norm = Normalize(vmin=x_vals.min(), vmax=x_vals.max())
+
+    # Plot each point with color based on quantile
+    colors = [cmap(norm(q)) for q in x_vals]
+
+    # Plot line connecting points
+    ax.plot(x_vals, y_vals, "k-", alpha=0.3, linewidth=1, zorder=1)
+
+    # Plot scatter with colors and labels
+    for i, (q, eps) in enumerate(zip(x_vals, y_vals)):
+        ax.scatter(
+            [q],
+            [eps],
+            c=[colors[i]],
+            s=100,
+            zorder=2,
+            label=f"q={q:.3f}: eps={eps:.2e}",
+        )
+
+    # Mark eps_star if available
+    if result.eps_star is not None:
+        ax.axhline(
+            result.eps_star,
+            color="red",
+            linestyle="--",
+            linewidth=2,
+            alpha=0.7,
+            label=f"eps* (median) = {result.eps_star:.2e}",
+        )
+
+    # Use log scale for y-axis (epsilon values span orders of magnitude)
+    ax.set_yscale("log")
+
+    # Labels and title
+    ax.set_xlabel("Quantile")
+    ax.set_ylabel("Epsilon (elbow threshold)")
+    ax.set_title("Quantile Elbow Analysis - Interior (x0 stickiness)")
+    ax.grid(True, alpha=0.3)
+
+    # Add legend (limit to reasonable number of entries)
+    if len(sorted_quantiles) <= 8:
+        ax.legend(loc="best", fontsize=8)
+    else:
+        # Just show eps_star in legend if too many quantiles
+        handles, labels = ax.get_legend_handles_labels()
+        # Keep only the eps_star line if present
+        eps_star_idx = [i for i, l in enumerate(labels) if "eps*" in l]
+        if eps_star_idx:
+            ax.legend([handles[eps_star_idx[0]]], [labels[eps_star_idx[0]]], loc="best")
+
+    fig.tight_layout()
+    return fig
+
+
+def _plot_boundary_quantile_elbows(result: BoundaryResult, config: PlotConfig) -> Figure:
+    """Plot quantile elbows for boundary (L/U stickiness) results."""
+    fig, axes = plt.subplots(1, 2, figsize=config.figsize_tolerance, dpi=config.dpi)
+
+    cmap = plt.get_cmap(config.cmap)
+    quantile_elbows = result.quantile_elbows
+
+    # Plot lower boundary
+    ax_lower = axes[0]
+    _plot_boundary_panel(
+        ax=ax_lower,
+        elbows=quantile_elbows.get("lower", {}),
+        t_star=result.t_lo_star,
+        boundary_name="Lower",
+        cmap=cmap,
+    )
+
+    # Plot upper boundary
+    ax_upper = axes[1]
+    _plot_boundary_panel(
+        ax=ax_upper,
+        elbows=quantile_elbows.get("upper", {}),
+        t_star=result.t_hi_star,
+        boundary_name="Upper",
+        cmap=cmap,
+    )
+
+    fig.tight_layout()
+    return fig
+
+
+def _plot_boundary_panel(
+    ax,
+    elbows: dict[float, float | None],
+    t_star: float | None,
+    boundary_name: str,
+    cmap,
+) -> None:
+    """Plot a single boundary panel for quantile elbow visualization."""
+    # Filter valid (non-None) elbows
+    if elbows is None:
+        elbows = {}
+    valid_elbows = {q: t for q, t in elbows.items() if t is not None}
+    sorted_quantiles = sorted(valid_elbows.keys())
+
+    if len(sorted_quantiles) == 0:
+        ax.text(
+            0.5,
+            0.5,
+            f"No valid elbow thresholds\nfor {boundary_name.lower()} boundary.",
+            ha="center",
+            va="center",
+            fontsize=12,
+            transform=ax.transAxes,
+        )
+        ax.set_xlabel("Quantile")
+        ax.set_ylabel("Tolerance (elbow threshold)")
+        ax.set_title(f"Quantile Elbow Analysis - {boundary_name} Boundary")
+        return
+
+    # Extract data
+    x_vals = np.array(sorted_quantiles)
+    y_vals = np.array([valid_elbows[q] for q in sorted_quantiles])
+
+    # Create color normalization
+    norm = Normalize(vmin=x_vals.min(), vmax=x_vals.max())
+    colors = [cmap(norm(q)) for q in x_vals]
+
+    # Plot line connecting points
+    ax.plot(x_vals, y_vals, "k-", alpha=0.3, linewidth=1, zorder=1)
+
+    # Plot scatter with colors
+    for i, (q, tol) in enumerate(zip(x_vals, y_vals)):
+        ax.scatter(
+            [q],
+            [tol],
+            c=[colors[i]],
+            s=100,
+            zorder=2,
+            label=f"q={q:.3f}: tol={tol:.4f}",
+        )
+
+    # Mark t_star if available
+    if t_star is not None:
+        ax.axhline(
+            t_star,
+            color="red",
+            linestyle="--",
+            linewidth=2,
+            alpha=0.7,
+            label=f"t* (median) = {t_star:.4f}",
+        )
+
+    # Labels and title
+    ax.set_xlabel("Quantile")
+    ax.set_ylabel("Tolerance (elbow threshold)")
+    ax.set_title(f"Quantile Elbow Analysis - {boundary_name} Boundary")
+    ax.grid(True, alpha=0.3)
+
+    # Add legend (limit entries)
+    if len(sorted_quantiles) <= 8:
+        ax.legend(loc="best", fontsize=8)
+    else:
+        handles, labels = ax.get_legend_handles_labels()
+        t_star_idx = [i for i, l in enumerate(labels) if "t*" in l]
+        if t_star_idx:
+            ax.legend([handles[t_star_idx[0]]], [labels[t_star_idx[0]]], loc="best")

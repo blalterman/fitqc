@@ -140,8 +140,9 @@ class TestPlotQuantileSpacingOverlaysDataDriven:
         transition_region = np.mean(ydata[-20:])
 
         # Pile-up region should have much smaller spacing
-        assert pile_region < transition_region, \
+        assert pile_region < transition_region, (
             f"Expected smaller spacing in pile-up region, got pile={pile_region}, trans={transition_region}"
+        )
 
         plt.close(fig)
 
@@ -157,9 +158,7 @@ class TestPlotQuantileSpacingOverlaysDataDriven:
         # Use specific tolerances - high tolerance should remove pile-up region
         tols = np.array([0.0, 0.015])  # Second tolerance removes pile-up region
 
-        fig = plot_quantile_spacing_overlays(
-            x, L=0.0, U=1.0, tols=tols, q_max=0.5, n_quantiles=50
-        )
+        fig = plot_quantile_spacing_overlays(x, L=0.0, U=1.0, tols=tols, q_max=0.5, n_quantiles=50)
 
         main_ax = fig.axes[0]
         assert len(main_ax.lines) >= 2
@@ -173,8 +172,9 @@ class TestPlotQuantileSpacingOverlaysDataDriven:
         mean_tol015 = np.mean(line_tol015.get_ydata())
 
         # After removing pile-up region, mean spacing should increase
-        assert mean_tol015 > mean_tol0 * 1.5, \
+        assert mean_tol015 > mean_tol0 * 1.5, (
             f"Expected larger spacing after filtering, got mean0={mean_tol0}, mean015={mean_tol015}"
+        )
 
         plt.close(fig)
 
@@ -309,9 +309,7 @@ class TestPlotQuantileSpacingOverlaysValidation:
 
         # With high tolerance, should remove data near boundaries
         tols = np.array([0.0, 0.1])  # 10% tolerance
-        fig = plot_quantile_spacing_overlays(
-            x, L=0.0, U=1.0, tols=tols, q_max=0.5, n_quantiles=100
-        )
+        fig = plot_quantile_spacing_overlays(x, L=0.0, U=1.0, tols=tols, q_max=0.5, n_quantiles=100)
 
         main_ax = fig.axes[0]
 
@@ -327,7 +325,8 @@ class TestPlotQuantileSpacingOverlaysValidation:
             mean1 = np.mean(line1)
 
             # With 10% tolerance removing boundary data, mean spacing should change
-            assert not np.allclose(mean0, mean1, rtol=0.01), \
+            assert not np.allclose(mean0, mean1, rtol=0.01), (
                 "Expected different spacing patterns with tolerance filtering"
+            )
 
         plt.close(fig)

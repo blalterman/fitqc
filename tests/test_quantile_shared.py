@@ -32,8 +32,9 @@ class TestAggregateElbowsMedian:
         true_value = 0.010
         median_error = abs(median_result - true_value)
         mean_error = abs(mean_result - true_value)
-        assert median_error < mean_error / 2, \
+        assert median_error < mean_error / 2, (
             f"Median error ({median_error}) should be < half of mean error ({mean_error})"
+        )
 
     def test_aggregation_requires_majority_agreement(self):
         """Verify that aggregation requires minimum fraction of valid elbows.

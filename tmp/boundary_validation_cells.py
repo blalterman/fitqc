@@ -14,7 +14,7 @@ import sys
 import numpy as np
 
 # Add path for POC functions
-sys.path.append('/home/user/fitqc/tmp')
+sys.path.append("/home/user/fitqc/tmp")
 
 from fitqc.synth import generate_with_boundary_pileup
 from fitqc.boundary import compute_u
@@ -47,8 +47,8 @@ x_tight = generate_with_boundary_pileup(
     L=0.0,
     U=1.0,
     lower_pileup_frac=0.03,  # 3% of data at boundary
-    pileup_width=0.003,      # 0.3% of range (tight!)
-    seed=42
+    pileup_width=0.003,  # 0.3% of range (tight!)
+    seed=42,
 )
 
 # Transform to u-space
@@ -63,11 +63,7 @@ print(f"Expected ground truth threshold: 0.003")
 # Test both approaches
 true_threshold_tight = 0.003
 result_tight = compare_single_vs_multi_curve(
-    u_tight_sorted,
-    GRID,
-    QUANTILE_GRID,
-    log_space=LOG_SPACE,
-    true_threshold=true_threshold_tight
+    u_tight_sorted, GRID, QUANTILE_GRID, log_space=LOG_SPACE, true_threshold=true_threshold_tight
 )
 
 # Print results
@@ -78,22 +74,30 @@ print(f"True threshold: {true_threshold_tight:.4f}")
 print(f"\nSingle-curve elbow (threshold): {result_tight['single_curve_elbow']}")
 print(f"Multi-curve elbow (quantile): {result_tight['multi_curve_elbow']}")
 
-if result_tight['multi_curve_elbow'] is not None:
+if result_tight["multi_curve_elbow"] is not None:
     multi_thresh_tight = np.interp(
-        result_tight['multi_curve_elbow'],
+        result_tight["multi_curve_elbow"],
         QUANTILE_GRID,
-        result_tight['diagnostics']['threshold_at_quantile']
+        result_tight["diagnostics"]["threshold_at_quantile"],
     )
     print(f"Multi-curve threshold: {multi_thresh_tight:.6f}")
 else:
     multi_thresh_tight = None
     print("Multi-curve threshold: None (no elbow detected)")
 
-print(f"\nSingle-curve error: {result_tight['single_error']:.6f}" if result_tight['single_error'] is not None else "\nSingle-curve error: None")
-print(f"Multi-curve error: {result_tight['multi_error']:.6f}" if result_tight['multi_error'] is not None else "Multi-curve error: None")
+print(
+    f"\nSingle-curve error: {result_tight['single_error']:.6f}"
+    if result_tight["single_error"] is not None
+    else "\nSingle-curve error: None"
+)
+print(
+    f"Multi-curve error: {result_tight['multi_error']:.6f}"
+    if result_tight["multi_error"] is not None
+    else "Multi-curve error: None"
+)
 
 print(f"\nQuantile-to-threshold ratios:")
-for q, r in zip(QUANTILE_GRID, result_tight['quantile_ratios']):
+for q, r in zip(QUANTILE_GRID, result_tight["quantile_ratios"]):
     print(f"  q={q:.3f}: ratio={r:.3f}")
 
 # Interpretation
@@ -104,11 +108,15 @@ print("For tight pileup, we expect:")
 print("  - Single-curve may struggle to detect the narrow pileup region")
 print("  - Multi-curve should show clear elbow near q=0.03 (pileup fraction)")
 print("  - Ratios should be very small (<< 1) before elbow, then increase")
-if result_tight['multi_error'] is not None and result_tight['single_error'] is not None:
-    if result_tight['multi_error'] < result_tight['single_error']:
-        print(f"\n  VALIDATION: Multi-curve is MORE accurate (error {result_tight['multi_error']:.6f} vs {result_tight['single_error']:.6f})")
+if result_tight["multi_error"] is not None and result_tight["single_error"] is not None:
+    if result_tight["multi_error"] < result_tight["single_error"]:
+        print(
+            f"\n  VALIDATION: Multi-curve is MORE accurate (error {result_tight['multi_error']:.6f} vs {result_tight['single_error']:.6f})"
+        )
     else:
-        print(f"\n  WARNING: Single-curve is more accurate (error {result_tight['single_error']:.6f} vs {result_tight['multi_error']:.6f})")
+        print(
+            f"\n  WARNING: Single-curve is more accurate (error {result_tight['single_error']:.6f} vs {result_tight['multi_error']:.6f})"
+        )
 print()
 
 
@@ -137,7 +145,7 @@ result_uniform = compare_single_vs_multi_curve(
     GRID,
     QUANTILE_GRID,
     log_space=LOG_SPACE,
-    true_threshold=None  # No ground truth for uniform
+    true_threshold=None,  # No ground truth for uniform
 )
 
 # Print results
@@ -147,11 +155,11 @@ print("-" * 80)
 print(f"Single-curve elbow (threshold): {result_uniform['single_curve_elbow']}")
 print(f"Multi-curve elbow (quantile): {result_uniform['multi_curve_elbow']}")
 
-if result_uniform['multi_curve_elbow'] is not None:
+if result_uniform["multi_curve_elbow"] is not None:
     multi_thresh_uniform = np.interp(
-        result_uniform['multi_curve_elbow'],
+        result_uniform["multi_curve_elbow"],
         QUANTILE_GRID,
-        result_uniform['diagnostics']['threshold_at_quantile']
+        result_uniform["diagnostics"]["threshold_at_quantile"],
     )
     print(f"Multi-curve threshold: {multi_thresh_uniform:.6f}")
 else:
@@ -159,12 +167,12 @@ else:
     print("Multi-curve threshold: None (no elbow detected)")
 
 print(f"\nQuantile-to-threshold ratios:")
-for q, r in zip(QUANTILE_GRID, result_uniform['quantile_ratios']):
+for q, r in zip(QUANTILE_GRID, result_uniform["quantile_ratios"]):
     print(f"  q={q:.3f}: ratio={r:.3f}")
 
 # Compute ratio statistics
-ratio_mean = np.nanmean(result_uniform['quantile_ratios'])
-ratio_std = np.nanstd(result_uniform['quantile_ratios'])
+ratio_mean = np.nanmean(result_uniform["quantile_ratios"])
+ratio_std = np.nanstd(result_uniform["quantile_ratios"])
 print(f"\nRatio statistics:")
 print(f"  Mean: {ratio_mean:.3f}")
 print(f"  Std: {ratio_std:.3f}")
@@ -184,9 +192,12 @@ if within_tolerance:
 else:
     print(f"\n  WARNING: Ratios deviate from expected (mean={ratio_mean:.3f}, expected ~1.0)")
 
-if result_uniform['single_curve_elbow'] is None and result_uniform['multi_curve_elbow'] is None:
+if result_uniform["single_curve_elbow"] is None and result_uniform["multi_curve_elbow"] is None:
     print("  VALIDATION: Both methods correctly found no strong elbow")
-elif result_uniform['single_curve_elbow'] is not None or result_uniform['multi_curve_elbow'] is not None:
+elif (
+    result_uniform["single_curve_elbow"] is not None
+    or result_uniform["multi_curve_elbow"] is not None
+):
     print("  NOTE: Weak elbows detected, but expected for uniform data edge effects")
 print()
 
@@ -204,8 +215,8 @@ x_broad = generate_with_boundary_pileup(
     L=0.0,
     U=1.0,
     lower_pileup_frac=0.10,  # 10% of data at boundary
-    pileup_width=0.05,       # 5% of range (broad)
-    seed=42
+    pileup_width=0.05,  # 5% of range (broad)
+    seed=42,
 )
 
 # Transform to u-space
@@ -220,11 +231,7 @@ print(f"Expected ground truth threshold: 0.05")
 # Test both approaches
 true_threshold_broad = 0.05
 result_broad = compare_single_vs_multi_curve(
-    u_broad_sorted,
-    GRID,
-    QUANTILE_GRID,
-    log_space=LOG_SPACE,
-    true_threshold=true_threshold_broad
+    u_broad_sorted, GRID, QUANTILE_GRID, log_space=LOG_SPACE, true_threshold=true_threshold_broad
 )
 
 # Print results
@@ -235,22 +242,30 @@ print(f"True threshold: {true_threshold_broad:.4f}")
 print(f"\nSingle-curve elbow (threshold): {result_broad['single_curve_elbow']}")
 print(f"Multi-curve elbow (quantile): {result_broad['multi_curve_elbow']}")
 
-if result_broad['multi_curve_elbow'] is not None:
+if result_broad["multi_curve_elbow"] is not None:
     multi_thresh_broad = np.interp(
-        result_broad['multi_curve_elbow'],
+        result_broad["multi_curve_elbow"],
         QUANTILE_GRID,
-        result_broad['diagnostics']['threshold_at_quantile']
+        result_broad["diagnostics"]["threshold_at_quantile"],
     )
     print(f"Multi-curve threshold: {multi_thresh_broad:.6f}")
 else:
     multi_thresh_broad = None
     print("Multi-curve threshold: None (no elbow detected)")
 
-print(f"\nSingle-curve error: {result_broad['single_error']:.6f}" if result_broad['single_error'] is not None else "\nSingle-curve error: None")
-print(f"Multi-curve error: {result_broad['multi_error']:.6f}" if result_broad['multi_error'] is not None else "Multi-curve error: None")
+print(
+    f"\nSingle-curve error: {result_broad['single_error']:.6f}"
+    if result_broad["single_error"] is not None
+    else "\nSingle-curve error: None"
+)
+print(
+    f"Multi-curve error: {result_broad['multi_error']:.6f}"
+    if result_broad["multi_error"] is not None
+    else "Multi-curve error: None"
+)
 
 print(f"\nQuantile-to-threshold ratios:")
-for q, r in zip(QUANTILE_GRID, result_broad['quantile_ratios']):
+for q, r in zip(QUANTILE_GRID, result_broad["quantile_ratios"]):
     print(f"  q={q:.3f}: ratio={r:.3f}")
 
 # Interpretation
@@ -263,11 +278,15 @@ print("  - Elbow should occur near q=0.10 (pileup fraction)")
 print("  - Broader pileup may be easier to detect than tight pileup")
 print("  - Both approaches should have reasonable accuracy")
 
-if result_broad['multi_error'] is not None and result_broad['single_error'] is not None:
-    if result_broad['multi_error'] < result_broad['single_error']:
-        print(f"\n  VALIDATION: Multi-curve is MORE accurate (error {result_broad['multi_error']:.6f} vs {result_broad['single_error']:.6f})")
-    elif result_broad['single_error'] < result_broad['multi_error']:
-        print(f"\n  NOTE: Single-curve is more accurate for broad pileup (error {result_broad['single_error']:.6f} vs {result_broad['multi_error']:.6f})")
+if result_broad["multi_error"] is not None and result_broad["single_error"] is not None:
+    if result_broad["multi_error"] < result_broad["single_error"]:
+        print(
+            f"\n  VALIDATION: Multi-curve is MORE accurate (error {result_broad['multi_error']:.6f} vs {result_broad['single_error']:.6f})"
+        )
+    elif result_broad["single_error"] < result_broad["multi_error"]:
+        print(
+            f"\n  NOTE: Single-curve is more accurate for broad pileup (error {result_broad['single_error']:.6f} vs {result_broad['multi_error']:.6f})"
+        )
     else:
         print(f"\n  NOTE: Both methods have similar accuracy")
 else:
@@ -286,35 +305,79 @@ print("\n" + "-" * 80)
 print("Scenario Comparison Table")
 print("-" * 80)
 
-print(f"{'Scenario':<20} {'True Thresh':<12} {'Single Elbow':<15} {'Multi Elbow':<15} {'Single Error':<15} {'Multi Error':<15}")
+print(
+    f"{'Scenario':<20} {'True Thresh':<12} {'Single Elbow':<15} {'Multi Elbow':<15} {'Single Error':<15} {'Multi Error':<15}"
+)
 print("-" * 92)
 
 # Tight pileup
-single_tight_str = f"{result_tight['single_curve_elbow']:.6f}" if result_tight['single_curve_elbow'] is not None else "None"
+single_tight_str = (
+    f"{result_tight['single_curve_elbow']:.6f}"
+    if result_tight["single_curve_elbow"] is not None
+    else "None"
+)
 multi_tight_str = f"{multi_thresh_tight:.6f}" if multi_thresh_tight is not None else "None"
-single_err_tight = f"{result_tight['single_error']:.6f}" if result_tight['single_error'] is not None else "None"
-multi_err_tight = f"{result_tight['multi_error']:.6f}" if result_tight['multi_error'] is not None else "None"
-print(f"{'Tight (3% in 0.3%)':<20} {true_threshold_tight:<12.6f} {single_tight_str:<15} {multi_tight_str:<15} {single_err_tight:<15} {multi_err_tight:<15}")
+single_err_tight = (
+    f"{result_tight['single_error']:.6f}" if result_tight["single_error"] is not None else "None"
+)
+multi_err_tight = (
+    f"{result_tight['multi_error']:.6f}" if result_tight["multi_error"] is not None else "None"
+)
+print(
+    f"{'Tight (3% in 0.3%)':<20} {true_threshold_tight:<12.6f} {single_tight_str:<15} {multi_tight_str:<15} {single_err_tight:<15} {multi_err_tight:<15}"
+)
 
 # Uniform
-single_uniform_str = f"{result_uniform['single_curve_elbow']:.6f}" if result_uniform['single_curve_elbow'] is not None else "None"
+single_uniform_str = (
+    f"{result_uniform['single_curve_elbow']:.6f}"
+    if result_uniform["single_curve_elbow"] is not None
+    else "None"
+)
 multi_uniform_str = f"{multi_thresh_uniform:.6f}" if multi_thresh_uniform is not None else "None"
-print(f"{'Uniform':<20} {'N/A':<12} {single_uniform_str:<15} {multi_uniform_str:<15} {'N/A':<15} {'N/A':<15}")
+print(
+    f"{'Uniform':<20} {'N/A':<12} {single_uniform_str:<15} {multi_uniform_str:<15} {'N/A':<15} {'N/A':<15}"
+)
 
 # Broad pileup
-single_broad_str = f"{result_broad['single_curve_elbow']:.6f}" if result_broad['single_curve_elbow'] is not None else "None"
+single_broad_str = (
+    f"{result_broad['single_curve_elbow']:.6f}"
+    if result_broad["single_curve_elbow"] is not None
+    else "None"
+)
 multi_broad_str = f"{multi_thresh_broad:.6f}" if multi_thresh_broad is not None else "None"
-single_err_broad = f"{result_broad['single_error']:.6f}" if result_broad['single_error'] is not None else "None"
-multi_err_broad = f"{result_broad['multi_error']:.6f}" if result_broad['multi_error'] is not None else "None"
-print(f"{'Broad (10% in 5%)':<20} {true_threshold_broad:<12.6f} {single_broad_str:<15} {multi_broad_str:<15} {single_err_broad:<15} {multi_err_broad:<15}")
+single_err_broad = (
+    f"{result_broad['single_error']:.6f}" if result_broad["single_error"] is not None else "None"
+)
+multi_err_broad = (
+    f"{result_broad['multi_error']:.6f}" if result_broad["multi_error"] is not None else "None"
+)
+print(
+    f"{'Broad (10% in 5%)':<20} {true_threshold_broad:<12.6f} {single_broad_str:<15} {multi_broad_str:<15} {single_err_broad:<15} {multi_err_broad:<15}"
+)
 
 print("\n" + "-" * 80)
 print("Key Findings:")
 print("-" * 80)
 
 # Count wins
-tight_winner = "Multi" if (result_tight['multi_error'] is not None and result_tight['single_error'] is not None and result_tight['multi_error'] < result_tight['single_error']) else "Single"
-broad_winner = "Multi" if (result_broad['multi_error'] is not None and result_broad['single_error'] is not None and result_broad['multi_error'] < result_broad['single_error']) else "Single"
+tight_winner = (
+    "Multi"
+    if (
+        result_tight["multi_error"] is not None
+        and result_tight["single_error"] is not None
+        and result_tight["multi_error"] < result_tight["single_error"]
+    )
+    else "Single"
+)
+broad_winner = (
+    "Multi"
+    if (
+        result_broad["multi_error"] is not None
+        and result_broad["single_error"] is not None
+        and result_broad["multi_error"] < result_broad["single_error"]
+    )
+    else "Single"
+)
 
 print(f"1. Tight pileup: {tight_winner}-curve is more accurate")
 print(f"2. Broad pileup: {broad_winner}-curve is more accurate")

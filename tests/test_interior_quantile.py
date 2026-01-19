@@ -1,7 +1,6 @@
 """Tests for interior quantile-based multi-curve stickiness detection."""
 
 import numpy as np
-import pytest
 from scipy.stats import linregress
 
 from fitqc.config import InteriorConfig
@@ -67,12 +66,14 @@ class TestQuantileCurveComputation:
         )
 
         # For q <= 0.05 (within spike), eps should be small
-        assert eps_at_quantile[2] < 1e-5, \
+        assert eps_at_quantile[2] < 1e-5, (
             f"Spike region (q=0.05) should need tiny epsilon, got {eps_at_quantile[2]}"
+        )
 
         # For q > 0.05 (beyond spike), eps should jump
-        assert eps_at_quantile[3] > 1e-5, \
+        assert eps_at_quantile[3] > 1e-5, (
             f"Beyond spike (q=0.10), epsilon should be larger, got {eps_at_quantile[3]}"
+        )
 
         # Verify there's a significant jump in epsilon as we cross the spike
         ratio = eps_at_quantile[3] / eps_at_quantile[2]
@@ -96,25 +97,27 @@ class TestQuantileCurveComputation:
         )
 
         # Check shapes
-        assert eps_at_quantile.shape == quantile_grid.shape, \
+        assert eps_at_quantile.shape == quantile_grid.shape, (
             f"Shape mismatch: {eps_at_quantile.shape} vs {quantile_grid.shape}"
-        assert len(elbows) == len(quantile_grid), \
+        )
+        assert len(elbows) == len(quantile_grid), (
             f"Elbows length mismatch: {len(elbows)} vs {len(quantile_grid)}"
+        )
 
         # Check dtype (should be floating point)
-        assert np.issubdtype(eps_at_quantile.dtype, np.floating), \
+        assert np.issubdtype(eps_at_quantile.dtype, np.floating), (
             f"eps_at_quantile should be float, got {eps_at_quantile.dtype}"
+        )
 
         # Check bounds (epsilon should be within grid range)
-        assert np.all(eps_at_quantile >= eps_grid.min()), \
-            "Epsilon values should be >= grid minimum"
-        assert np.all(eps_at_quantile <= eps_grid.max()), \
-            "Epsilon values should be <= grid maximum"
+        assert np.all(eps_at_quantile >= eps_grid.min()), "Epsilon values should be >= grid minimum"
+        assert np.all(eps_at_quantile <= eps_grid.max()), "Epsilon values should be <= grid maximum"
 
         # Check that elbows are either float or None
         for i, elbow in enumerate(elbows):
-            assert elbow is None or isinstance(elbow, float), \
+            assert elbow is None or isinstance(elbow, float), (
                 f"Elbow {i} should be float or None, got {type(elbow)}"
+            )
 
 
 class TestSpikeDetectionIndependence:
@@ -129,14 +132,7 @@ class TestSpikeDetectionIndependence:
         """
         # Generate data with spike at exactly x0
         # Use the existing generator which places samples EXACTLY at x0
-        x_spike = generate_with_x0_spike(
-            n=10000,
-            x0=0.5,
-            L=0.0,
-            U=1.0,
-            spike_frac=0.05,
-            seed=42
-        )
+        x_spike = generate_with_x0_spike(n=10000, x0=0.5, L=0.0, U=1.0, spike_frac=0.05, seed=42)
 
         config_single = InteriorConfig(use_quantile_analysis=False)
         config_multi = InteriorConfig(use_quantile_analysis=True)
@@ -145,8 +141,9 @@ class TestSpikeDetectionIndependence:
         result_multi = run_interior_qc(x_spike, x0=0.5, L=0.0, U=1.0, config=config_multi)
 
         # Spike detection should be IDENTICAL
-        assert result_single.spike_detected == result_multi.spike_detected, \
+        assert result_single.spike_detected == result_multi.spike_detected, (
             "Spike detection must be independent of threshold method"
+        )
 
         # Both should detect the spike exists
         assert result_single.spike_detected is True, "Single-curve should detect spike"
@@ -155,13 +152,15 @@ class TestSpikeDetectionIndependence:
         # Spike location should be the same (or very close)
         assert result_single.spike_z_loc is not None
         assert result_multi.spike_z_loc is not None
-        assert abs(result_single.spike_z_loc - result_multi.spike_z_loc) < 0.01, \
+        assert abs(result_single.spike_z_loc - result_multi.spike_z_loc) < 0.01, (
             "Spike location should be nearly identical"
+        )
 
         # eps_star MAY differ (that's the point of multi-curve)
         # But both should detect that there IS a threshold
-        assert result_single.eps_star is not None or result_multi.eps_star is not None, \
+        assert result_single.eps_star is not None or result_multi.eps_star is not None, (
             "At least one method should find a threshold"
+        )
 
     def test_broad_distribution_no_spike_detected(self):
         """Broad distribution centered at x0 should NOT trigger spike detection.
@@ -179,8 +178,9 @@ class TestSpikeDetectionIndependence:
         result = run_interior_qc(x, x0=0.5, L=0.0, U=1.0, config=config)
 
         # Should NOT detect spike (histogram will be broad, not narrow)
-        assert not result.spike_detected, \
+        assert not result.spike_detected, (
             "Broad distribution should not trigger spike detection (width criterion)"
+        )
 
         # eps_star might be None (no spike detected, so no threshold computed)
         # This is expected and correct behavior
@@ -196,46 +196,40 @@ class TestIntegration:
         accuracy for very tight spikes at machine precision levels.
         """
         # Very tight spike: 3% at exactly x0
-        x = generate_with_x0_spike(
-            n=10000,
-            x0=0.5,
-            L=0.0,
-            U=1.0,
-            spike_frac=0.03,
-            seed=42
-        )
+        x = generate_with_x0_spike(n=10000, x0=0.5, L=0.0, U=1.0, spike_frac=0.03, seed=42)
 
         config_old = InteriorConfig(use_quantile_analysis=False)
         config_new = InteriorConfig(
-            use_quantile_analysis=True,
-            quantile_grid=(0.005, 0.01, 0.02, 0.03, 0.05)
+            use_quantile_analysis=True, quantile_grid=(0.005, 0.01, 0.02, 0.03, 0.05)
         )
 
         result_old = run_interior_qc(x, x0=0.5, L=0.0, U=1.0, config=config_old)
         result_new = run_interior_qc(x, x0=0.5, L=0.0, U=1.0, config=config_new)
 
         # Both should detect spike
-        assert result_old.spike_detected and result_new.spike_detected, \
+        assert result_old.spike_detected and result_new.spike_detected, (
             "Both methods should detect the spike"
+        )
 
         # New method should give eps_star
-        assert result_new.eps_star is not None, \
-            "Multi-curve should find a threshold"
+        assert result_new.eps_star is not None, "Multi-curve should find a threshold"
 
         # We expect eps_star to be small (spike is tight)
         # The spike width is 1e-10, so eps_star should be in that ballpark
-        assert result_new.eps_star < 1e-6, \
+        assert result_new.eps_star < 1e-6, (
             f"Should detect tight spike, got eps_star={result_new.eps_star}"
+        )
 
         # Verify quantile_elbows is populated in multi-curve mode
-        assert result_new.quantile_elbows is not None, \
-            "Multi-curve should populate quantile_elbows"
-        assert len(result_new.quantile_elbows) == len(config_new.quantile_grid), \
+        assert result_new.quantile_elbows is not None, "Multi-curve should populate quantile_elbows"
+        assert len(result_new.quantile_elbows) == len(config_new.quantile_grid), (
             "Should have one elbow per quantile"
+        )
 
         # Verify quantile_elbows is NOT populated in single-curve mode
-        assert result_old.quantile_elbows is None, \
+        assert result_old.quantile_elbows is None, (
             "Single-curve should not populate quantile_elbows"
+        )
 
     def test_quantile_elbows_diagnostic_info(self):
         """Verify that quantile_elbows provides useful diagnostic information.
@@ -244,19 +238,9 @@ class TestIntegration:
         and contains meaningful information for debugging.
         """
         # Generate spike: 5% of samples exactly at x0
-        x = generate_with_x0_spike(
-            n=5000,
-            x0=0.5,
-            L=0.0,
-            U=1.0,
-            spike_frac=0.05,
-            seed=42
-        )
+        x = generate_with_x0_spike(n=5000, x0=0.5, L=0.0, U=1.0, spike_frac=0.05, seed=42)
 
-        config = InteriorConfig(
-            use_quantile_analysis=True,
-            quantile_grid=(0.01, 0.02, 0.05, 0.10)
-        )
+        config = InteriorConfig(use_quantile_analysis=True, quantile_grid=(0.01, 0.02, 0.05, 0.10))
 
         result = run_interior_qc(x, x0=0.5, L=0.0, U=1.0, config=config)
 
@@ -374,10 +358,12 @@ class TestInteriorEdgeCases:
 
         # Edge case: bimodal distribution (some at x0, rest elsewhere)
         # Half at x0, half far away
-        x_bimodal = np.concatenate([
-            np.full(500, 5.0),  # At x0
-            np.full(500, 9.0)   # Far from x0
-        ])
+        x_bimodal = np.concatenate(
+            [
+                np.full(500, 5.0),  # At x0
+                np.full(500, 9.0),  # Far from x0
+            ]
+        )
         result_bimodal = run_interior_qc(x_bimodal, x0=5.0, L=0.0, U=10.0)
 
         # Should detect spike (50% at x0 is a clear spike)

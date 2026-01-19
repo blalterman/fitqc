@@ -227,9 +227,7 @@ def compare_single_vs_multi_curve(
             # is the x-value (quantile) where the elbow occurs. We need the corresponding threshold.
             if multi_curve_elbow is not None:
                 # Find the threshold at the elbow quantile
-                elbow_threshold = np.interp(
-                    multi_curve_elbow, quantile_grid, threshold_at_quantile
-                )
+                elbow_threshold = np.interp(multi_curve_elbow, quantile_grid, threshold_at_quantile)
                 multi_error = abs(elbow_threshold - true_threshold)
 
     # Package results
@@ -263,9 +261,7 @@ if __name__ == "__main__":
     grid = np.linspace(0, 1, 100)
     quantile_grid = np.linspace(0.1, 0.9, 20)
 
-    thresh, elbows, diag = compute_quantile_threshold_curves(
-        data_uniform, grid, quantile_grid
-    )
+    thresh, elbows, diag = compute_quantile_threshold_curves(data_uniform, grid, quantile_grid)
 
     print(f"Quantile grid: {quantile_grid[:5]} ... {quantile_grid[-5:]}")
     print(f"Threshold at quantile: {thresh[:5]} ... {thresh[-5:]}")
@@ -285,23 +281,13 @@ if __name__ == "__main__":
     )
 
     print(f"Quantile grid: {quantile_grid[:5]} ... {quantile_grid[-5:]}")
-    print(
-        f"Threshold at quantile: {thresh_pileup[:5]} ... {thresh_pileup[-5:]}"
-    )
-    print(
-        f"Ratio (threshold/quantile): {diag_pileup['ratio'][:5]} ... {diag_pileup['ratio'][-5:]}"
-    )
-    print(
-        f"Mean ratio (q < 0.5): {np.nanmean(diag_pileup['ratio'][quantile_grid < 0.5]):.3f}"
-    )
-    print(
-        f"Mean ratio (q >= 0.5): {np.nanmean(diag_pileup['ratio'][quantile_grid >= 0.5]):.3f}"
-    )
+    print(f"Threshold at quantile: {thresh_pileup[:5]} ... {thresh_pileup[-5:]}")
+    print(f"Ratio (threshold/quantile): {diag_pileup['ratio'][:5]} ... {diag_pileup['ratio'][-5:]}")
+    print(f"Mean ratio (q < 0.5): {np.nanmean(diag_pileup['ratio'][quantile_grid < 0.5]):.3f}")
+    print(f"Mean ratio (q >= 0.5): {np.nanmean(diag_pileup['ratio'][quantile_grid >= 0.5]):.3f}")
     print(f"Elbow detected at quantile: {elbows_pileup[0]}")
     if elbows_pileup[0] is not None:
-        elbow_threshold = np.interp(
-            elbows_pileup[0], quantile_grid, thresh_pileup
-        )
+        elbow_threshold = np.interp(elbows_pileup[0], quantile_grid, thresh_pileup)
         print(f"Corresponding threshold: {elbow_threshold:.6f}")
 
     # Test 3: Compare single vs multi-curve
@@ -315,11 +301,11 @@ if __name__ == "__main__":
     print(f"True threshold: {true_threshold}")
     print(f"Single-curve elbow (threshold): {results['single_curve_elbow']}")
     print(f"Multi-curve elbow (quantile): {results['multi_curve_elbow']}")
-    if results['multi_curve_elbow'] is not None:
+    if results["multi_curve_elbow"] is not None:
         multi_thresh = np.interp(
-            results['multi_curve_elbow'],
+            results["multi_curve_elbow"],
             quantile_grid,
-            results['diagnostics']['threshold_at_quantile'],
+            results["diagnostics"]["threshold_at_quantile"],
         )
         print(f"Multi-curve elbow (threshold): {multi_thresh:.6f}")
     print(f"Single-curve error: {results['single_error']}")

@@ -51,8 +51,8 @@ def main():
         seed=42,
     )
     print(f"  Bounds: [{L}, {U}]")
-    print(f"  Lower pile-up: ~15% of samples")
-    print(f"  Upper pile-up: ~8% of samples")
+    print("  Lower pile-up: ~15% of samples")
+    print("  Upper pile-up: ~8% of samples")
     print()
 
     # Configure plotting

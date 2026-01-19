@@ -36,7 +36,7 @@ class TestBoundaryBackwardCompatibility:
             lower_pileup_frac=0.05,
             upper_pileup_frac=0.0,
             pileup_width=0.01,
-            seed=42
+            seed=42,
         )
 
         # Run with quantile analysis disabled (single-curve mode)
@@ -44,13 +44,13 @@ class TestBoundaryBackwardCompatibility:
         result_single = run_boundary_qc(x, L=0.0, U=10.0, config=config_single)
 
         # Verify standard fields are present
-        assert hasattr(result_single, 'lower_pileup_detected')
-        assert hasattr(result_single, 'upper_pileup_detected')
-        assert hasattr(result_single, 't_lo_star')
-        assert hasattr(result_single, 't_hi_star')
-        assert hasattr(result_single, 'tol_grid')
-        assert hasattr(result_single, 'lower_mass_curve')
-        assert hasattr(result_single, 'upper_mass_curve')
+        assert hasattr(result_single, "lower_pileup_detected")
+        assert hasattr(result_single, "upper_pileup_detected")
+        assert hasattr(result_single, "t_lo_star")
+        assert hasattr(result_single, "t_hi_star")
+        assert hasattr(result_single, "tol_grid")
+        assert hasattr(result_single, "lower_mass_curve")
+        assert hasattr(result_single, "upper_mass_curve")
 
         # Should detect lower pileup
         assert result_single.lower_pileup_detected is True
@@ -62,9 +62,10 @@ class TestBoundaryBackwardCompatibility:
 
         # Verify that quantile_elbows field is NOT present or is None
         # (since we're in single-curve mode)
-        if hasattr(result_single, 'quantile_elbows'):
-            assert result_single.quantile_elbows is None, \
+        if hasattr(result_single, "quantile_elbows"):
+            assert result_single.quantile_elbows is None, (
                 "Single-curve mode should not compute quantile_elbows"
+            )
 
         # Verify that result gives same detection as before quantile feature
         # For uniform data, single-curve should not detect pileup
@@ -151,7 +152,7 @@ class TestBoundaryEdgeCases:
             lower_pileup_frac=0.10,  # 10% pileup
             upper_pileup_frac=0.0,
             pileup_width=0.01,  # 1% of range
-            seed=42
+            seed=42,
         )
         result_mostly_lower = run_boundary_qc(x_mostly_lower, L=0.0, U=10.0)
 
@@ -170,7 +171,7 @@ class TestBoundaryEdgeCases:
             lower_pileup_frac=0.0,
             upper_pileup_frac=0.10,
             pileup_width=0.01,
-            seed=42
+            seed=42,
         )
         result_mostly_upper = run_boundary_qc(x_mostly_upper, L=0.0, U=10.0)
 
@@ -189,7 +190,7 @@ class TestBoundaryEdgeCases:
             lower_pileup_frac=0.08,
             upper_pileup_frac=0.08,
             pileup_width=0.01,
-            seed=42
+            seed=42,
         )
         result_both = run_boundary_qc(x_both, L=0.0, U=10.0)
 
@@ -221,12 +222,7 @@ class TestProgressiveGrid:
 
     def test_progressive_grid_spacing_increases(self):
         """Progressive grid should have increasing spacing as tol increases."""
-        config = BoundaryConfig(
-            tol_min=0.0,
-            tol_max=0.05,
-            n_tols=45,
-            grid_mode="progressive"
-        )
+        config = BoundaryConfig(tol_min=0.0, tol_max=0.05, n_tols=45, grid_mode="progressive")
         grid = _build_tolerance_grid(config)
 
         spacings = np.diff(grid)
@@ -254,12 +250,15 @@ class TestProgressiveGrid:
         region4_spacing = np.mean(spacings[region4_mask[:-1]])
 
         # Verify progressive increase
-        assert region1_spacing < region2_spacing, \
+        assert region1_spacing < region2_spacing, (
             f"Spacing should increase: R1={region1_spacing:.6f} >= R2={region2_spacing:.6f}"
-        assert region2_spacing < region3_spacing, \
+        )
+        assert region2_spacing < region3_spacing, (
             f"Spacing should increase: R2={region2_spacing:.6f} >= R3={region3_spacing:.6f}"
-        assert region3_spacing < region4_spacing, \
+        )
+        assert region3_spacing < region4_spacing, (
             f"Spacing should increase: R3={region3_spacing:.6f} >= R4={region4_spacing:.6f}"
+        )
 
     def test_progressive_grid_coverage_matches_uniform(self):
         """Progressive grid should have better resolution in tight region."""
@@ -285,9 +284,10 @@ class TestProgressiveGrid:
             progressive_errors.append(abs(t - progressive_nearest))
 
         # Progressive should have smaller mean error in tight region
-        assert np.mean(progressive_errors) < np.mean(uniform_errors), \
-            f"Progressive grid should have better resolution in tight region: " \
+        assert np.mean(progressive_errors) < np.mean(uniform_errors), (
+            f"Progressive grid should have better resolution in tight region: "
             f"prog={np.mean(progressive_errors):.6f} >= uniform={np.mean(uniform_errors):.6f}"
+        )
 
 
 class TestQuantileCurveComputation:
@@ -312,8 +312,13 @@ class TestQuantileCurveComputation:
 
         # For uniform data, tol ≈ q
         ratio = tol_at_quantile / quantile_grid
-        np.testing.assert_allclose(ratio, 1.0, rtol=0.1, atol=0.01,
-            err_msg=f"Uniform data should have tol/q ≈ 1, got {ratio}")
+        np.testing.assert_allclose(
+            ratio,
+            1.0,
+            rtol=0.1,
+            atol=0.01,
+            err_msg=f"Uniform data should have tol/q ≈ 1, got {ratio}",
+        )
 
         # Verify linearity via R² test
         slope, intercept, r_value, p_value, std_err = linregress(quantile_grid, tol_at_quantile)
@@ -333,7 +338,9 @@ class TestQuantileCurveComputation:
         quantile_grid = np.array([0.01, 0.02, 0.03, 0.05, 0.07, 0.10, 0.15, 0.20])
         tol_grid = np.linspace(0.0, 0.25, 251)
 
-        tol_at_quantile, elbows = _compute_quantile_curves_boundary(u_sorted, tol_grid, quantile_grid)
+        tol_at_quantile, elbows = _compute_quantile_curves_boundary(
+            u_sorted, tol_grid, quantile_grid
+        )
 
         # Compute ratio tol/q
         ratio = tol_at_quantile / quantile_grid
@@ -341,22 +348,25 @@ class TestQuantileCurveComputation:
         # For q <= 0.05 (within pileup), ratio should be << 1
         pileup_region_mask = quantile_grid <= 0.05
         pileup_ratios = ratio[pileup_region_mask]
-        assert np.all(pileup_ratios < 0.5), \
+        assert np.all(pileup_ratios < 0.5), (
             f"Pileup region should have tol << q (ratio < 0.5), got {pileup_ratios}"
+        )
 
         # For q > 0.10 (beyond pileup), ratio should be approaching 1
         # (may not be exactly 1 due to finite sample effects and the remaining pileup influence)
         uniform_region_mask = quantile_grid > 0.10
         uniform_ratios = ratio[uniform_region_mask]
         # The ratios should be higher than in the pileup region (showing the transition)
-        assert np.mean(uniform_ratios) > 0.5, \
+        assert np.mean(uniform_ratios) > 0.5, (
             f"Beyond pileup, ratios should increase from pileup values, got {uniform_ratios}"
+        )
 
         # Elbow detection should find elbow in the pileup region
         elbow_q = elbows[0]
         assert elbow_q is not None, "Should detect elbow for pileup data"
-        assert 0.01 <= elbow_q <= 0.10, \
+        assert 0.01 <= elbow_q <= 0.10, (
             f"Elbow should be in pileup region (q <= 0.10), got {elbow_q:.3f}"
+        )
 
     def test_quantile_curve_shape_dtype_bounds(self):
         """Quantile curve should have correct shape, dtype, and value bounds."""
@@ -410,8 +420,7 @@ class TestElbowAggregation:
 
         result = _aggregate_elbows_median(elbows_mostly_none, min_agreement_frac=0.5)
 
-        assert result is None, \
-            "Should return None when <50% of quantiles found elbows"
+        assert result is None, "Should return None when <50% of quantiles found elbows"
 
         # Exactly 4 out of 7 (>50%) should succeed
         elbows_majority = [0.010, 0.011, None, 0.010, None, 0.009, None]
@@ -436,13 +445,12 @@ class TestMultiCurveIntegration:
             n_tols=45,
             grid_mode="progressive",
             quantile_grid=(0.005, 0.01, 0.02, 0.03, 0.05, 0.10),
-            use_quantile_analysis=True
+            use_quantile_analysis=True,
         )
         result_new = run_boundary_qc(x, L=0.0, U=1.0, config=config_new)
 
         # New method should detect
-        assert result_new.lower_pileup_detected, \
-            "New method should detect tight pileup"
+        assert result_new.lower_pileup_detected, "New method should detect tight pileup"
 
         # Verify detected tolerance is near true pileup width
         assert result_new.t_lo_star is not None
@@ -462,7 +470,7 @@ class TestMultiCurveIntegration:
             n_tols=45,
             grid_mode="progressive",
             quantile_grid=(0.005, 0.01, 0.02, 0.05, 0.10),
-            use_quantile_analysis=True
+            use_quantile_analysis=True,
         )
 
         result = run_boundary_qc(x_uniform, L=0.0, U=1.0, config=config)
@@ -484,7 +492,7 @@ class TestMultiCurveIntegration:
             n_tols=45,
             grid_mode="progressive",
             quantile_grid=(0.01, 0.02, 0.05, 0.10, 0.15),
-            use_quantile_analysis=True
+            use_quantile_analysis=True,
         )
 
         result = run_boundary_qc(x, L=0.0, U=1.0, config=config)
@@ -498,5 +506,6 @@ class TestMultiCurveIntegration:
         if result.lower_pileup_detected:
             assert result.t_lo_star is not None
             # Tolerance should be broad (in the 3-6% range)
-            assert result.t_lo_star >= 0.02, \
+            assert result.t_lo_star >= 0.02, (
                 f"Detected tolerance should be broad, got {result.t_lo_star:.3f}"
+            )

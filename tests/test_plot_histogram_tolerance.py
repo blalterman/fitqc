@@ -44,7 +44,6 @@ class TestPlotHistogramToleranceOverlays:
         assert has_colorbar, "Expected colorbar axis at right edge"
         plt.close(fig)
 
-
     def test_empty_array_after_filtering_high_tolerance(self):
         """Test that function handles empty arrays gracefully at high tolerance."""
         # Small dataset that will be completely filtered out at high tolerances
@@ -72,9 +71,7 @@ class TestPlotHistogramToleranceOverlays:
         x = np.random.default_rng(42).uniform(0, 1, 1000)
         custom_tols = np.array([0.0, 0.01, 0.02, 0.03])
 
-        fig = plot_histogram_tolerance_overlays(
-            x, L=0.0, U=1.0, tols=custom_tols, bins=50
-        )
+        fig = plot_histogram_tolerance_overlays(x, L=0.0, U=1.0, tols=custom_tols, bins=50)
 
         assert isinstance(fig, plt.Figure)
 
@@ -188,8 +185,9 @@ class TestPlotHistogramToleranceOverlays:
         # Verify this would remove most of the pile-up samples
         n_after_filtering = np.sum(x > 0.05)
         assert n_after_filtering < len(x), "Filtering should reduce sample count"
-        assert n_after_filtering == pytest.approx(len(x) - n_in_boundary, abs=10), \
+        assert n_after_filtering == pytest.approx(len(x) - n_in_boundary, abs=10), (
             "tol=0.05 should remove samples <= 0.05"
+        )
 
         assert isinstance(fig, plt.Figure)
         plt.close(fig)
@@ -197,10 +195,12 @@ class TestPlotHistogramToleranceOverlays:
     def test_all_data_at_boundaries(self):
         """Test with all data concentrated at boundaries."""
         # All data at boundaries
-        x = np.concatenate([
-            np.full(500, 0.0),  # Half at lower boundary
-            np.full(500, 1.0),  # Half at upper boundary
-        ])
+        x = np.concatenate(
+            [
+                np.full(500, 0.0),  # Half at lower boundary
+                np.full(500, 1.0),  # Half at upper boundary
+            ]
+        )
 
         fig = plot_histogram_tolerance_overlays(x, L=0.0, U=1.0, n_tols=5, bins=50)
         assert isinstance(fig, plt.Figure)

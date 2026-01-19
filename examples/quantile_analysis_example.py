@@ -33,9 +33,7 @@ def example_boundary_detection():
 
     # Single-curve detection (default)
     print("\nRunning single-curve detection (default)...")
-    result_single = detect_stickiness(
-        data, mode="boundary", L=0.0, U=1.0, config=None
-    )
+    result_single = detect_stickiness(data, mode="boundary", L=0.0, U=1.0, config=None)
 
     print(f"  Lower pileup detected: {result_single['boundary'].lower_pileup_detected}")
     print(f"  Threshold t_lo*: {result_single['boundary'].t_lo_star}")
@@ -48,9 +46,7 @@ def example_boundary_detection():
         quantile_grid=(0.001, 0.005, 0.01, 0.02, 0.05),
     )
 
-    result_multi = detect_stickiness(
-        data, mode="boundary", L=0.0, U=1.0, config=config_boundary
-    )
+    result_multi = detect_stickiness(data, mode="boundary", L=0.0, U=1.0, config=config_boundary)
 
     print(f"  Lower pileup detected: {result_multi['boundary'].lower_pileup_detected}")
     print(f"  Threshold t_lo*: {result_multi['boundary'].t_lo_star}")
@@ -79,18 +75,14 @@ def example_interior_detection():
 
     # Single-curve detection (default)
     print("\nRunning single-curve detection (default)...")
-    result_single = detect_stickiness(
-        data, mode="interior", x0=x0, L=0.0, U=1.0, config=None
-    )
+    result_single = detect_stickiness(data, mode="interior", x0=x0, L=0.0, U=1.0, config=None)
 
     print(f"  Spike detected: {result_single['interior'].spike_detected}")
     print(f"  Threshold eps*: {result_single['interior'].eps_star}")
 
     # Multi-curve detection
     print("\nRunning multi-curve detection...")
-    config_interior = InteriorConfig(
-        use_quantile_analysis=True, quantile_grid=(0.001, 0.01, 0.05)
-    )
+    config_interior = InteriorConfig(use_quantile_analysis=True, quantile_grid=(0.001, 0.01, 0.05))
 
     result_multi = detect_stickiness(
         data, mode="interior", x0=x0, L=0.0, U=1.0, config=config_interior
@@ -129,9 +121,7 @@ def example_combined_detection():
         quantile_grid=(0.001, 0.005, 0.01, 0.02, 0.05),
     )
 
-    config_interior = InteriorConfig(
-        use_quantile_analysis=True, quantile_grid=(0.001, 0.01, 0.05)
-    )
+    config_interior = InteriorConfig(use_quantile_analysis=True, quantile_grid=(0.001, 0.01, 0.05))
 
     # Run combined detection
     print("\nRunning combined detection with multi-curve analysis...")
@@ -176,9 +166,7 @@ def main():
     print("\n" + "=" * 70)
     print("QUANTILE-BASED STICKINESS DETECTION EXAMPLES")
     print("=" * 70)
-    print(
-        "\nThese examples demonstrate the new multi-curve quantile analysis features"
-    )
+    print("\nThese examples demonstrate the new multi-curve quantile analysis features")
     print("for both boundary and interior stickiness detection.")
 
     # Set random seed for reproducibility

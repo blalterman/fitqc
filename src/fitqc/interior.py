@@ -258,19 +258,16 @@ def _compute_quantile_curves_interior(
     # CRITICAL: Interpolate in LOG-SPACE because eps_grid is log-spaced
     # Using linear interpolation in log-space maintains the log-scale relationship
     log_eps_at_quantile = np.interp(
-        quantile_grid,           # x values (quantiles we want)
-        z_mass_curve,            # y values (cumulative probabilities)
-        np.log(eps_grid)         # x values (log of epsilon grid)
+        quantile_grid,  # x values (quantiles we want)
+        z_mass_curve,  # y values (cumulative probabilities)
+        np.log(eps_grid),  # x values (log of epsilon grid)
     )
     eps_at_quantile = np.exp(log_eps_at_quantile)
 
     # Step 3: Treat each quantile's epsilon as an independent threshold estimate
     # The median aggregation (done by caller) will combine these robustly
     # Filter out any NaN or infinite values
-    elbows_per_quantile = [
-        float(eps) if np.isfinite(eps) else None
-        for eps in eps_at_quantile
-    ]
+    elbows_per_quantile = [float(eps) if np.isfinite(eps) else None for eps in eps_at_quantile]
 
     return eps_at_quantile, elbows_per_quantile
 
