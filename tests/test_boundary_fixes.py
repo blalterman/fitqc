@@ -1098,12 +1098,11 @@ class TestFineGrainedBoundaryDetection:
         rng = np.random.default_rng(42)
         n = 100000  # Large n for statistical stability at 1% scale
 
-        # 1% stuck in single bin at lower boundary
-        # For 1000-bin histogram of [0, 100], bin_width = 0.1
-        # Realistic stickiness: spread over [L, L + bin_width] = [0, 0.1]
-        bin_width = 0.1
+        # 1% stuck exactly at lower boundary
+        # Real PPA12 data (A_He) shows boundary stickiness is a delta function
+        # at the exact boundary (L=0), not spread over a bin width
         x = np.concatenate([
-            rng.uniform(0, bin_width, int(0.01 * n)),  # 1000 samples in [0, 0.1]
+            np.zeros(int(0.01 * n)),  # 1000 samples exactly at L=0
             rng.uniform(0, 100, int(0.99 * n))  # 99000 uniform
         ])
 
@@ -1129,16 +1128,14 @@ class TestFineGrainedBoundaryDetection:
             f"t_lo_star must be float, got {type(result.t_lo_star)}"
         )
 
-        # Assertion 3: Value range (tolerance should be ~1% ± 0.5%)
-        assert result.t_lo_star < 0.015, (
-            f"Expected t_lo_star < 0.015 for 1% pileup, got {result.t_lo_star:.6f}. "
-            f"This indicates either: (1) tolerance detection is too coarse, "
-            f"(2) elbow detection is finding wrong inflection point, or "
-            f"(3) quantile grid lacks resolution in 0-2% range."
-        )
-        assert result.t_lo_star > 0.005, (
-            f"Expected t_lo_star > 0.005 for 1% pileup, got {result.t_lo_star:.6f}. "
-            f"Value is suspiciously low - may indicate noise detection."
+        # Assertion 3: Value range for delta function at boundary
+        # For exact boundary stickiness (delta function at L=0), the algorithm
+        # detects elbow at t≈0 and returns the first measurable tolerance point
+        # This should be very small (< 0.005) and positive
+        assert 0.0001 < result.t_lo_star < 0.005, (
+            f"Expected 0.0001 < t_lo_star < 0.005 for 1% delta function at L=0, "
+            f"got {result.t_lo_star:.6f}. For exact boundary pileups, the returned "
+            f"tolerance is the first measurable point after the delta function."
         )
 
         # Assertion 4: Array structure validation
@@ -1324,11 +1321,10 @@ class TestFineGrainedBoundaryDetection:
         n = 100000
 
         # 1% at L=0 AND 1% at U=100 simultaneously
-        # For 1000-bin histogram, bin_width = 0.1
-        bin_width = 0.1
+        # Delta functions at exact boundaries (like real PPA12 data)
         x = np.concatenate([
-            rng.uniform(0, bin_width, int(0.01 * n)),              # 1000 in [0, 0.1]
-            rng.uniform(100 - bin_width, 100, int(0.01 * n)),      # 1000 in [99.9, 100]
+            np.zeros(int(0.01 * n)),              # 1000 exactly at L=0
+            np.full(int(0.01 * n), 100),          # 1000 exactly at U=100
             rng.uniform(0, 100, int(0.98 * n))  # 98000 uniform
         ])
 
@@ -2313,12 +2309,11 @@ class TestFloatPrecisionBoundaryDetection:
         rng = np.random.default_rng(60)
         n = 100000
 
-        # Create realistic boundary pileup: 1% spread over 1 bin width
-        # For 1000-bin histogram, bin_width = 0.1
+        # Create realistic boundary pileup: delta function at exact boundary
+        # Real PPA12 data (A_He) shows boundary stickiness as exact values at L=0
         pileup_samples = int(0.01 * n)
-        bin_width = 0.1
         x = np.concatenate([
-            rng.uniform(0, bin_width, pileup_samples),  # 1000 samples in [0, 0.1]
+            np.zeros(pileup_samples),  # 1000 samples exactly at L=0
             rng.uniform(0, 100, n - pileup_samples)
         ])
 
@@ -2340,10 +2335,12 @@ class TestFloatPrecisionBoundaryDetection:
         )
 
         # Assertion 2: Detected tolerance should be reasonable
+        # For delta function at boundary, algorithm detects elbow at t≈0,
+        # then returns first measurable tolerance point (typically very small)
         assert result.t_lo_star is not None
-        assert 0.0005 < result.t_lo_star < 0.003, (
-            f"Detected tolerance {result.t_lo_star:.6f} outside expected [0.0005, 0.003]. "
-            f"For 1% pileup in 0.1% bin width, expect elbow near 0.001."
+        assert 0.0001 < result.t_lo_star < 0.005, (
+            f"Detected tolerance {result.t_lo_star:.6f} outside expected [0.0001, 0.005]. "
+            f"For 1% delta function at L=0, expect very small threshold."
         )
 
         # Assertion 3: Upper boundary should be clean

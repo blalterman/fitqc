@@ -195,15 +195,22 @@ def _compute_quantile_curves_boundary(
 
     # Detect elbow in (quantile, tolerance) relationship
     # For uniform data: tolerance ≈ quantile (linear)
-    # For pileup data: tolerance << quantile initially (many samples in small tol),
-    #                  then tolerance ≈ quantile (back to uniform)
-    # The elbow is where this transition occurs
-    elbow_overall = select_elbow(
-        quantile_grid, tol_at_quantile, curve="concave", direction="increasing"
+    # For pileup data: tolerance ≈ 0 initially (delta function at boundary),
+    #                  then tolerance starts rising (back to uniform)
+    # The curve transitions from flat (t≈0) to rising, which is convex
+    elbow_quantile = select_elbow(
+        quantile_grid, tol_at_quantile, curve="convex", direction="increasing"
     )
 
+    # Convert elbow from quantile-space to tolerance-space
+    if elbow_quantile is not None:
+        # Look up the tolerance value at the detected elbow quantile
+        elbow_tol = np.interp(elbow_quantile, quantile_grid, tol_at_quantile)
+    else:
+        elbow_tol = None
+
     # Return list with single elbow (will be aggregated across lower/upper boundaries)
-    elbows_per_quantile = [elbow_overall]
+    elbows_per_quantile = [elbow_tol]
 
     return tol_at_quantile, elbows_per_quantile
 
@@ -347,6 +354,12 @@ def _refine_elbow_iteratively(
         # If no elbow found, stop iteration
         if current_elbow is None:
             return None, current_grid
+
+        # Special case: elbow at t≈0 (delta function at boundary)
+        # Don't attempt to refine around t=0 - numerical issues with quantile inversion
+        # Just return the initial detection
+        if current_elbow < 1e-10:
+            return current_elbow, current_grid
 
         # Check convergence
         if previous_elbow is not None:
@@ -534,12 +547,42 @@ def run_boundary_qc(
     ) -> tuple[bool, float | None]:
         """Check if there's excess mass at the elbow tolerance.
 
+        Special handling for t≈0 (delta function at exact boundary):
+        When elbow is detected at t≈0, this indicates samples concentrated
+        exactly at the boundary (e.g., optimizer stuck at L=0). We measure
+        the pileup using the first measurable non-zero tolerance point.
+
         Returns:
             Tuple of (has_pileup, validated_tolerance).
             If no excess mass, tolerance is set to None.
         """
-        if t_star is None or t_star < pileup_threshold:
+        if t_star is None:
             return False, None
+
+        # Special case: elbow at very small t indicates delta function at boundary
+        # This happens when optimizer gets stuck exactly at L or U
+        # Example: A_He PPA12 has 1.64% samples at exactly L=0
+        # After iterative refinement and aggregation, the median elbow might be
+        # slightly above zero (e.g., 0.0003) even when many individual elbows are at 0
+        # Use pileup_threshold as the cutoff: elbows smaller than this need special handling
+        if t_star < pileup_threshold:
+            # Check if this small elbow represents a genuine delta function pileup
+            # Find first non-zero tolerance point to measure the pileup
+            # Skip tol_grid[0] which is often exactly 0
+            for idx in range(1, min(5, len(tol_grid))):  # Check first few points
+                t_check = tol_grid[idx]
+                if t_check > 1e-10:  # Found measurable tolerance
+                    mass_check = mass_curve[idx]
+                    # For delta function, mass should be nearly constant up to pileup width
+                    # Check if mass >> uniform expectation at this tolerance
+                    if mass_check > t_check * excess_ratio:
+                        # Valid pileup detected
+                        # Return the measurement tolerance (not the elbow value)
+                        return True, float(t_check)
+            # No measurable pileup found - elbow is small but no excess mass
+            return False, None
+
+        # Normal case: elbow at measurable tolerance (t_star >= pileup_threshold)
         # Find the mass at t_star by interpolation
         idx = np.searchsorted(tol_grid, t_star)
         if idx >= len(mass_curve):
