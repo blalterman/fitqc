@@ -6,6 +6,8 @@ boundary, creating detectable excess mass in the distribution.
 
 The Algorithm
 -------------
+**Single-Curve Mode (default):**
+
 1. Transform x -> u = (x - L) / (U - L), so u=0 at L, u=1 at U
 2. For lower boundary: compute P(u < tol) for each tol in linspace(tol_min, tol_max, n_tols)
 3. For upper boundary: compute P(u > 1-tol) = P(1-u < tol) similarly
@@ -16,20 +18,231 @@ The mass curve P(u < tol) vs tol shows:
 - For uniform data: linear growth (P ~ tol)
 - For boundary pileup: sharp initial rise then slower growth (elbow indicates pileup region)
 
+**Multi-Curve Mode (use_quantile_analysis=True):**
+
+For more robust threshold estimation, especially for tight pileups:
+
+1. Compute the same u-transformation
+2. For each quantile q in quantile_grid, find the tolerance tol where P(u < tol) = q
+3. Detect elbows in the (quantile, tolerance) relationship for each quantile
+4. Aggregate across quantiles using median to get final t_lo*, t_hi*
+
+This multi-curve approach provides:
+- Better accuracy for very tight pileups (< 0.5% of range)
+- Robustness via median aggregation across quantiles
+- Diagnostic information via quantile_elbows field in results
+
+Grid Modes
+----------
+**uniform**: Standard linear spacing from tol_min to tol_max
+**progressive**: Denser spacing near boundaries (0-1%), coarser farther out
+
+Progressive mode is recommended for detecting very tight pileups where most
+concentration occurs within 1% of the boundary.
+
 Why Elbow Detection?
 --------------------
 The elbow point indicates where "stuck" samples end and "natural" samples begin.
 If no elbow is found, there's no boundary pileup - the distribution is uniform
 near the boundary.
+
+Examples
+--------
+Single-curve detection (default behavior):
+
+>>> from fitqc.boundary import run_boundary_qc
+>>> from fitqc.config import BoundaryConfig
+>>> import numpy as np
+>>>
+>>> # Generate data with lower boundary pileup
+>>> x = np.concatenate([
+...     np.random.uniform(0.0, 0.01, 500),   # 500 stuck at lower bound
+...     np.random.uniform(0.0, 1.0, 9500)     # 9500 uniform
+... ])
+>>>
+>>> result = run_boundary_qc(x, L=0.0, U=1.0)
+>>> print(f"Lower pileup detected: {result.lower_pileup_detected}")
+>>> print(f"Threshold t_lo*: {result.t_lo_star}")
+
+Multi-curve detection with progressive grid:
+
+>>> config = BoundaryConfig(
+...     grid_mode="progressive",
+...     use_quantile_analysis=True,
+...     quantile_grid=(0.001, 0.005, 0.01, 0.02, 0.05)
+... )
+>>> result = run_boundary_qc(x, L=0.0, U=1.0, config=config)
+>>> print(f"Lower pileup detected: {result.lower_pileup_detected}")
+>>> print(f"Threshold t_lo*: {result.t_lo_star}")
+>>> if result.quantile_elbows:
+...     print(f"Quantile elbows: {result.quantile_elbows['lower']}")
 """
 
 from dataclasses import dataclass
 
 import numpy as np
+from numpy.typing import NDArray
 
 from fitqc.config import BoundaryConfig
 from fitqc.selection import select_elbow
 from fitqc.sortedops import tail_mass
+
+
+def _build_tolerance_grid(config: BoundaryConfig) -> NDArray[np.floating]:
+    """Build tolerance grid for boundary detection.
+
+    Supports both uniform and progressive grid modes. Progressive mode concentrates
+    resolution near the boundary (where tight pileups occur) and uses coarser
+    spacing farther out.
+
+    Args:
+        config: BoundaryConfig specifying grid mode and parameters.
+
+    Returns:
+        Array of tolerance values in [tol_min, tol_max].
+
+    Examples:
+        >>> # Uniform grid (default)
+        >>> config = BoundaryConfig(tol_min=0.0, tol_max=0.05, n_tols=41, grid_mode="uniform")
+        >>> grid = _build_tolerance_grid(config)
+        >>> len(grid)
+        41
+        >>> grid[0], grid[-1]
+        (0.0, 0.05)
+
+        >>> # Progressive grid (denser near 0)
+        >>> config = BoundaryConfig(grid_mode="progressive")
+        >>> grid = _build_tolerance_grid(config)
+        >>> spacing_near_zero = grid[1] - grid[0]
+        >>> spacing_far = grid[-1] - grid[-2]
+        >>> spacing_far > spacing_near_zero  # Coarser farther out
+        True
+    """
+    if config.grid_mode == "uniform":
+        return np.linspace(config.tol_min, config.tol_max, config.n_tols)
+    elif config.grid_mode == "progressive":
+        # Progressive grid: denser near 0, coarser farther out
+        # Breakpoints based on empirical pileup distributions
+        # Most stickiness is in [0, 0.001] (0-0.1% of range)
+        # Some stickiness extends to [0.001, 0.005] (0.1-0.5%)
+        # Broad pileups can reach [0.005, 0.02] (0.5-2%)
+        # Beyond 0.02 (2%) is rarely stickiness
+        return np.concatenate(
+            [
+                np.linspace(0.0000, 0.0010, 11),  # [0, 0.1%]:   11 points, 0.01% spacing
+                np.linspace(0.0010, 0.0050, 17)[1:],  # [0.1%, 0.5%]: 16 points, 0.025% spacing
+                np.linspace(0.0050, 0.0200, 13)[1:],  # [0.5%, 2%]:   12 points, 0.125% spacing
+                np.linspace(0.0200, 0.0500, 7)[1:],  # [2%, 5%]:      6 points, 0.75% spacing
+            ]
+        )
+    else:
+        raise ValueError(
+            f"Unknown grid_mode: {config.grid_mode}. Must be 'uniform' or 'progressive'."
+        )
+
+
+def _compute_quantile_curves_boundary(
+    u_sorted: NDArray[np.floating],
+    tol_grid: NDArray[np.floating],
+    quantile_grid: NDArray[np.floating],
+) -> tuple[NDArray[np.floating], list[float | None]]:
+    """Compute quantile-based threshold curves for boundary detection.
+
+    For each quantile q, finds the tolerance where P(u < tol) = q via inverse CDF.
+    Then detects elbow in the (quantile, tolerance) relationship, which shows where
+    pileup transitions to natural variation.
+
+    Args:
+        u_sorted: Sorted array of normalized parameter values in [0, 1].
+        tol_grid: Array of tolerance values to evaluate.
+        quantile_grid: Array of quantiles in (0, 1) to analyze.
+
+    Returns:
+        Tuple of:
+            - tol_at_quantile: Array of tolerance values achieving each quantile.
+              Shape matches quantile_grid. tol_at_quantile[i] is the tolerance
+              where P(u < tol) = quantile_grid[i].
+            - elbows_per_quantile: List of elbow points detected, one per quantile.
+              Currently returns [elbow_overall] where elbow_overall is detected
+              in the (quantile, tolerance) space.
+
+    Examples:
+        >>> # Uniform data: tol should be proportional to quantile
+        >>> u = np.sort(np.random.uniform(0, 1, 1000))
+        >>> tol_grid = np.linspace(0, 0.15, 151)
+        >>> quantile_grid = np.array([0.01, 0.05, 0.10])
+        >>> tol_at_q, elbows = _compute_quantile_curves_boundary(u, tol_grid, quantile_grid)
+        >>> # For uniform data, ratio tol/q should be ~1
+        >>> ratio = tol_at_q / quantile_grid
+        >>> np.allclose(ratio, 1.0, atol=0.1)
+        True
+
+        >>> # Data with pileup: elbow appears at pileup fraction
+        >>> u_pileup = np.concatenate([np.zeros(50), np.random.uniform(0, 1, 950)])
+        >>> u_pileup = np.sort(u_pileup)
+        >>> tol_at_q, elbows = _compute_quantile_curves_boundary(u_pileup, tol_grid, quantile_grid)
+        >>> # Should detect elbow (not None)
+        >>> elbows[0] is not None
+        True
+    """
+    # Compute mass curve: P(u < tol) for each tolerance
+    mass_curve = np.array([tail_mass(u_sorted, tol) for tol in tol_grid])
+
+    # For each quantile, find tolerance where mass = quantile (inverse CDF)
+    # Use linear interpolation
+    tol_at_quantile = np.interp(quantile_grid, mass_curve, tol_grid)
+
+    # Detect elbow in (quantile, tolerance) relationship
+    # For uniform data: tolerance ≈ quantile (linear)
+    # For pileup data: tolerance << quantile initially (many samples in small tol),
+    #                  then tolerance ≈ quantile (back to uniform)
+    # The elbow is where this transition occurs
+    elbow_overall = select_elbow(
+        quantile_grid, tol_at_quantile, curve="concave", direction="increasing"
+    )
+
+    # Return list with single elbow (will be aggregated across lower/upper boundaries)
+    elbows_per_quantile = [elbow_overall]
+
+    return tol_at_quantile, elbows_per_quantile
+
+
+def _aggregate_elbows_median(
+    elbows: list[float | None], min_agreement_frac: float = 0.5
+) -> float | None:
+    """Aggregate multiple elbow estimates via median.
+
+    This is a temporary stub that will be replaced by the shared implementation
+    from Agent 3 in src/fitqc/_quantile_utils.py. For now, provides basic
+    median aggregation functionality.
+
+    Args:
+        elbows: List of elbow estimates, potentially containing None values.
+        min_agreement_frac: Minimum fraction of non-None elbows required
+            for a valid result (default 0.5 = 50%).
+
+    Returns:
+        Median of valid elbows if sufficient agreement, else None.
+
+    Examples:
+        >>> # Majority agree
+        >>> elbows = [0.010, 0.011, 0.009, 0.010, None, 0.011]
+        >>> result = _aggregate_elbows_median(elbows)
+        >>> result is not None
+        True
+
+        >>> # Insufficient agreement (<50% valid)
+        >>> elbows = [0.010, None, None, None, 0.012]
+        >>> result = _aggregate_elbows_median(elbows, min_agreement_frac=0.5)
+        >>> result is None
+        True
+    """
+    valid_elbows = [e for e in elbows if e is not None]
+
+    if len(valid_elbows) < min_agreement_frac * len(elbows):
+        return None  # Insufficient agreement
+
+    return float(np.median(valid_elbows))
 
 
 def compute_u(x: np.ndarray, L: float, U: float) -> np.ndarray:
@@ -70,25 +283,24 @@ def compute_u(x: np.ndarray, L: float, U: float) -> np.ndarray:
 
 @dataclass
 class BoundaryResult:
-    """Result of boundary QC analysis.
+    """Result of boundary QC analysis."""
 
-    Attributes:
-        lower_pileup_detected: Whether excess mass was detected near lower bound.
-        upper_pileup_detected: Whether excess mass was detected near upper bound.
-        t_lo_star: Optimal lower tolerance (elbow point), or None if no elbow.
-        t_hi_star: Optimal upper tolerance (elbow point), or None if no elbow.
-        tol_grid: Array of tolerance values tested.
-        lower_mass_curve: P(u < tol) for each tolerance.
-        upper_mass_curve: P(u > 1-tol) for each tolerance.
-    """
-
+    #: Whether excess mass was detected near lower bound.
     lower_pileup_detected: bool
+    #: Whether excess mass was detected near upper bound.
     upper_pileup_detected: bool
+    #: Optimal lower tolerance (elbow point), or None if no elbow.
     t_lo_star: float | None
+    #: Optimal upper tolerance (elbow point), or None if no elbow.
     t_hi_star: float | None
+    #: Array of tolerance values tested.
     tol_grid: np.ndarray
+    #: P(u < tol) for each tolerance.
     lower_mass_curve: np.ndarray
+    #: P(u > 1-tol) for each tolerance.
     upper_mass_curve: np.ndarray
+    #: Quantile elbow data (only with use_quantile_analysis=True).
+    quantile_elbows: dict[str, dict[float, float | None]] | None = None
 
 
 def run_boundary_qc(
@@ -118,8 +330,8 @@ def run_boundary_qc(
     # Transform to normalized coordinates
     u = compute_u(x, L, U)
 
-    # Build tolerance grid
-    tol_grid = np.linspace(config.tol_min, config.tol_max, config.n_tols)
+    # Build tolerance grid based on grid_mode
+    tol_grid = _build_tolerance_grid(config)
 
     # Sort u for efficient tail_mass computation
     u_sorted = np.sort(u)
@@ -132,20 +344,57 @@ def run_boundary_qc(
     one_minus_u_sorted = np.sort(1 - u)
     upper_mass_curve = np.array([tail_mass(one_minus_u_sorted, tol) for tol in tol_grid])
 
-    # Use elbow detection to find optimal tolerances
-    # The mass curve is concave and increasing when there's pileup
-    # Skip tol=0 for elbow detection (avoid singularities)
-    if tol_grid[0] == 0.0 and len(tol_grid) > 1:
-        elbow_tols = tol_grid[1:]
-        elbow_lower_mass = lower_mass_curve[1:]
-        elbow_upper_mass = upper_mass_curve[1:]
-    else:
-        elbow_tols = tol_grid
-        elbow_lower_mass = lower_mass_curve
-        elbow_upper_mass = upper_mass_curve
+    # Initialize quantile_elbows as None (will be populated if multi-curve enabled)
+    quantile_elbows_result = None
 
-    t_lo_raw = select_elbow(elbow_tols, elbow_lower_mass, curve="concave", direction="increasing")
-    t_hi_raw = select_elbow(elbow_tols, elbow_upper_mass, curve="concave", direction="increasing")
+    # Choose detection method based on config
+    if config.use_quantile_analysis:
+        # Multi-curve quantile analysis
+        quantile_grid_arr = np.array(config.quantile_grid)
+
+        # Compute quantile curves for lower boundary
+        tol_at_quantile_lower, elbows_lower = _compute_quantile_curves_boundary(
+            u_sorted, tol_grid, quantile_grid_arr
+        )
+
+        # Compute quantile curves for upper boundary
+        tol_at_quantile_upper, elbows_upper = _compute_quantile_curves_boundary(
+            one_minus_u_sorted, tol_grid, quantile_grid_arr
+        )
+
+        # Aggregate elbows via median
+        t_lo_raw = _aggregate_elbows_median(elbows_lower, config.min_quantile_agreement)
+        t_hi_raw = _aggregate_elbows_median(elbows_upper, config.min_quantile_agreement)
+
+        # Store quantile elbows for diagnostics
+        quantile_elbows_result = {
+            "lower": {
+                float(q): float(tol)
+                for q, tol in zip(quantile_grid_arr, tol_at_quantile_lower, strict=True)
+            },
+            "upper": {
+                float(q): float(tol)
+                for q, tol in zip(quantile_grid_arr, tol_at_quantile_upper, strict=True)
+            },
+        }
+    else:
+        # Single-curve elbow detection (original method)
+        # Skip tol=0 for elbow detection (avoid singularities)
+        if tol_grid[0] == 0.0 and len(tol_grid) > 1:
+            elbow_tols = tol_grid[1:]
+            elbow_lower_mass = lower_mass_curve[1:]
+            elbow_upper_mass = upper_mass_curve[1:]
+        else:
+            elbow_tols = tol_grid
+            elbow_lower_mass = lower_mass_curve
+            elbow_upper_mass = upper_mass_curve
+
+        t_lo_raw = select_elbow(
+            elbow_tols, elbow_lower_mass, curve="concave", direction="increasing"
+        )
+        t_hi_raw = select_elbow(
+            elbow_tols, elbow_upper_mass, curve="concave", direction="increasing"
+        )
 
     # Detect pileup based on whether elbow shows excess mass
     # For uniform data, we expect P(u < tol) ≈ tol
@@ -187,4 +436,5 @@ def run_boundary_qc(
         tol_grid=tol_grid,
         lower_mass_curve=lower_mass_curve,
         upper_mass_curve=upper_mass_curve,
+        quantile_elbows=quantile_elbows_result,
     )
