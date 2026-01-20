@@ -93,3 +93,95 @@ def a_he_test_case(a_he_values, a_he_metadata) -> dict:
         "x0": a_he_metadata["x0"],
         "expected": a_he_metadata["fitqc_test"],
     }
+
+
+# =============================================================================
+# Helper function for loading test data
+# =============================================================================
+
+
+def _load_test_case(data_dir: Path, name: str) -> dict:
+    """Load a test case by parameter name.
+
+    Args:
+        data_dir: Path to tests/data directory
+        name: Parameter name (e.g., "A_He", "e_dv_pp")
+
+    Returns:
+        Dictionary with values, L, U, x0, expected
+    """
+    values = pd.read_parquet(data_dir / f"{name}_test_sample.parquet")["values"].values
+    with open(data_dir / f"{name}_test_metadata.json") as f:
+        meta = json.load(f)
+    return {
+        "values": values,
+        "L": meta["L"],
+        "U": meta["U"],
+        "x0": meta["x0"],
+        "expected": meta["fitqc_test"],
+    }
+
+
+# =============================================================================
+# e_dv_pp: Proton-proton drift velocity perturbation
+# Exhibits BOTH lower and upper boundary stickiness (~12% at L, ~4% at U)
+# =============================================================================
+
+
+@pytest.fixture
+def e_dv_pp_test_case() -> dict:
+    """Test case for e_dv_pp parameter.
+
+    Distribution characteristics:
+        - ~11.7% at lower boundary (L=-75.0)
+        - ~4.1% at upper boundary (U=75.0)
+        - ~1.6% at x0=0.0
+
+    This parameter exhibits strong bilateral boundary stickiness,
+    making it ideal for testing detection at both boundaries.
+    """
+    data_dir = Path(__file__).parent / "data"
+    return _load_test_case(data_dir, "e_dv_pp")
+
+
+# =============================================================================
+# e_dv_ap: Alpha-proton drift velocity perturbation
+# Exhibits boundary stickiness at both bounds
+# =============================================================================
+
+
+@pytest.fixture
+def e_dv_ap_test_case() -> dict:
+    """Test case for e_dv_ap parameter.
+
+    Distribution characteristics:
+        - ~0.6% at lower boundary (L=-150.0)
+        - ~1.2% at upper boundary (U=150.0)
+        - ~1.6% at x0=0.0
+
+    This parameter exhibits moderate boundary stickiness at both bounds.
+    """
+    data_dir = Path(__file__).parent / "data"
+    return _load_test_case(data_dir, "e_dv_ap")
+
+
+# =============================================================================
+# np1: Proton core density (moment-based, no fixed x0)
+# Minimal boundary stickiness - useful as negative control
+# =============================================================================
+
+
+@pytest.fixture
+def np1_test_case() -> dict:
+    """Test case for np1 parameter.
+
+    Distribution characteristics:
+        - ~0% at lower boundary (L=0.01)
+        - ~0.005% at upper boundary (U=100.0)
+        - No fixed x0 (moment-based)
+
+    This parameter has minimal boundary stickiness and serves as a
+    negative control - detection should return False for both boundaries.
+    """
+    data_dir = Path(__file__).parent / "data"
+    return _load_test_case(data_dir, "np1")
