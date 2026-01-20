@@ -76,7 +76,7 @@ class TestPlotHistogramToleranceOverlays:
         assert isinstance(fig, plt.Figure)
 
         # Get colorbar axis (should be at right edge)
-        cbar_ax = [ax for ax in fig.axes if ax.get_position().x0 > 0.9][0]
+        cbar_ax = next(ax for ax in fig.axes if ax.get_position().x0 > 0.9)
 
         # Check colorbar limits match custom tolerance range
         ylim = cbar_ax.get_ylim()

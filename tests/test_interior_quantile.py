@@ -34,7 +34,7 @@ class TestQuantileCurveComputation:
         # For uniform z, log(eps) should be approximately linear in quantile
         # (since the CDF is linear, the inverse CDF should also be linear in log-space)
         # Note: Due to discrete sampling and interpolation, we don't expect perfect linearity
-        slope, intercept, r_value, _, _ = linregress(quantile_grid, np.log(eps_at_quantile))
+        _, _, r_value, _, _ = linregress(quantile_grid, np.log(eps_at_quantile))
 
         # R² should show reasonable linearity (relaxed threshold due to discrete sampling)
         assert r_value**2 > 0.75, f"Should show linear trend in log-space, got R²={r_value**2}"
@@ -61,9 +61,7 @@ class TestQuantileCurveComputation:
         quantile_grid = np.array([0.01, 0.02, 0.05, 0.10, 0.15, 0.20])
         eps_grid = np.logspace(-12, -3, 100)
 
-        eps_at_quantile, elbows = _compute_quantile_curves_interior(
-            z_sorted, eps_grid, quantile_grid
-        )
+        eps_at_quantile, _ = _compute_quantile_curves_interior(z_sorted, eps_grid, quantile_grid)
 
         # For q <= 0.05 (within spike), eps should be small
         assert eps_at_quantile[2] < 1e-5, (

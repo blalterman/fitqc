@@ -55,7 +55,7 @@ packages = ["src/fitqc"]
 target-version = "py311"
 line-length = 100
 src = ["src"]
-extend-exclude = ["docs", "notebooks"]
+extend-exclude = ["docs", "notebooks", "tmp"]
 
 [tool.ruff.lint]
 select = [

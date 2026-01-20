@@ -141,8 +141,6 @@ class TestBoundaryEdgeCases:
         When ALL samples are at the exact same value, the mass curve is flat
         (no elbow exists). We test with realistic pileups that have small spread.
         """
-        rng = np.random.default_rng(42)
-
         # Significant concentration near lower bound
         # Use parameters known to work (from backward compat test)
         x_mostly_lower = generate_with_boundary_pileup(
@@ -321,7 +319,7 @@ class TestQuantileCurveComputation:
         )
 
         # Verify linearity via R² test
-        slope, intercept, r_value, p_value, std_err = linregress(quantile_grid, tol_at_quantile)
+        slope, intercept, r_value, _, _ = linregress(quantile_grid, tol_at_quantile)
 
         assert r_value**2 > 0.99, f"Should be linear (R²={r_value**2:.4f})"
         assert slope == pytest.approx(1.0, abs=0.1), f"Slope should be ≈1, got {slope:.3f}"

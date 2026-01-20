@@ -174,7 +174,7 @@ class TestPlotEcdfToleranceDataDriven:
         assert isinstance(fig, plt.Figure)
 
         # Get colorbar axis (should be at right edge)
-        cbar_ax = [ax for ax in fig.axes if ax.get_position().x0 > 0.9][0]
+        cbar_ax = next(ax for ax in fig.axes if ax.get_position().x0 > 0.9)
 
         # Check colorbar limits match custom tolerance range
         ylim = cbar_ax.get_ylim()
@@ -268,8 +268,6 @@ class TestPlotEcdfToleranceVisualProperties:
         fig = plot_ecdf_tolerance_overlays(u, config=config)
 
         # Colorbar should use the specified colormap
-        # The colorbar is the second axis
-        cbar_ax = fig.axes[1]
         # Just verify it doesn't crash - detailed colormap checking is complex
         assert isinstance(fig, plt.Figure)
         plt.close(fig)

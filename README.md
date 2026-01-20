@@ -26,6 +26,7 @@ pip install fitqc
 For development:
 ```bash
 pip install -e ".[dev]"
+pre-commit install
 ```
 
 ## Quick Start
