@@ -369,10 +369,12 @@ def run_boundary_qc(
         # Store quantile elbows for diagnostics
         quantile_elbows_result = {
             "lower": {
-                float(q): float(tol) for q, tol in zip(quantile_grid_arr, tol_at_quantile_lower)
+                float(q): float(tol)
+                for q, tol in zip(quantile_grid_arr, tol_at_quantile_lower, strict=True)
             },
             "upper": {
-                float(q): float(tol) for q, tol in zip(quantile_grid_arr, tol_at_quantile_upper)
+                float(q): float(tol)
+                for q, tol in zip(quantile_grid_arr, tol_at_quantile_upper, strict=True)
             },
         }
     else:

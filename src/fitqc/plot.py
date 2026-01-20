@@ -878,7 +878,7 @@ def _plot_interior_quantile_elbows(result: InteriorResult, config: PlotConfig) -
     ax.plot(x_vals, y_vals, "k-", alpha=0.3, linewidth=1, zorder=1)
 
     # Plot scatter with colors and labels
-    for i, (q, eps) in enumerate(zip(x_vals, y_vals)):
+    for i, (q, eps) in enumerate(zip(x_vals, y_vals, strict=True)):
         ax.scatter(
             [q],
             [eps],
@@ -915,7 +915,7 @@ def _plot_interior_quantile_elbows(result: InteriorResult, config: PlotConfig) -
         # Just show eps_star in legend if too many quantiles
         handles, labels = ax.get_legend_handles_labels()
         # Keep only the eps_star line if present
-        eps_star_idx = [i for i, l in enumerate(labels) if "eps*" in l]
+        eps_star_idx = [i for i, label in enumerate(labels) if "eps*" in label]
         if eps_star_idx:
             ax.legend([handles[eps_star_idx[0]]], [labels[eps_star_idx[0]]], loc="best")
 
@@ -995,7 +995,7 @@ def _plot_boundary_panel(
     ax.plot(x_vals, y_vals, "k-", alpha=0.3, linewidth=1, zorder=1)
 
     # Plot scatter with colors
-    for i, (q, tol) in enumerate(zip(x_vals, y_vals)):
+    for i, (q, tol) in enumerate(zip(x_vals, y_vals, strict=True)):
         ax.scatter(
             [q],
             [tol],
@@ -1027,6 +1027,6 @@ def _plot_boundary_panel(
         ax.legend(loc="best", fontsize=8)
     else:
         handles, labels = ax.get_legend_handles_labels()
-        t_star_idx = [i for i, l in enumerate(labels) if "t*" in l]
+        t_star_idx = [i for i, label in enumerate(labels) if "t*" in label]
         if t_star_idx:
             ax.legend([handles[t_star_idx[0]]], [labels[t_star_idx[0]]], loc="best")

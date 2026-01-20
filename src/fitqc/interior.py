@@ -375,7 +375,7 @@ def run_interior_qc(
             from fitqc._quantile_utils import _aggregate_elbows_median
 
             quantile_grid = np.array(config.quantile_grid)
-            eps_at_quantile, elbows = _compute_quantile_curves_interior(
+            _, elbows = _compute_quantile_curves_interior(
                 z_sorted, eps_grid, quantile_grid
             )
 
@@ -385,7 +385,7 @@ def run_interior_qc(
             # Store quantile elbow information for diagnostics
             quantile_elbows = {
                 float(q): (float(eps) if eps is not None else None)
-                for q, eps in zip(quantile_grid, elbows)
+                for q, eps in zip(quantile_grid, elbows, strict=True)
             }
         else:
             # Single-curve mode (default): Original elbow detection
