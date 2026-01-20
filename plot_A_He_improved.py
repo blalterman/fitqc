@@ -103,10 +103,11 @@ if len(x_zoom_lower) > 0:
              edgecolor='none', alpha=0.85, zorder=2)
 
     ax3.set_xlabel('Raw value (x)', fontsize=10)
-    ax3.set_ylabel('Count', fontsize=10)
-    ax3.set_title(f'Near Lower Boundary\nx < {zoom_threshold_lower} ({len(x_zoom_lower):,} samples)',
+    ax3.set_ylabel('Count (log scale)', fontsize=10)
+    ax3.set_yscale('log')
+    ax3.set_title(f'Near Lower Boundary (LOG)\nx < {zoom_threshold_lower} ({len(x_zoom_lower):,} samples)',
                   fontsize=11, fontweight='bold')
-    ax3.grid(True, alpha=0.2, zorder=0)
+    ax3.grid(True, alpha=0.2, which='both', zorder=0)
 else:
     ax3.text(0.5, 0.5, 'No samples in range', ha='center', va='center',
              transform=ax3.transAxes)
@@ -168,11 +169,12 @@ if len(u_zoom_extreme_lower) > 0:
              color='firebrick', edgecolor='none', alpha=0.85, zorder=2)
 
     ax6.set_xlabel('Normalized u', fontsize=10)
-    ax6.set_ylabel('Count', fontsize=10)
-    ax6.set_title(f'U-Space Near Lower (u < 0.02)\n{len(u_zoom_extreme_lower):,} samples',
+    ax6.set_ylabel('Count (log scale)', fontsize=10)
+    ax6.set_yscale('log')
+    ax6.set_title(f'U-Space Near Lower (LOG, u < 0.02)\n{len(u_zoom_extreme_lower):,} samples',
                   fontsize=11, fontweight='bold')
     ax6.legend(fontsize=8, loc='upper right')
-    ax6.grid(True, alpha=0.2, zorder=0)
+    ax6.grid(True, alpha=0.2, which='both', zorder=0)
 else:
     ax6.text(0.5, 0.5, 'No samples in range', ha='center', va='center',
              transform=ax6.transAxes)
@@ -195,11 +197,12 @@ if len(u_zoom_upper) > 0:
              edgecolor='none', alpha=0.85, zorder=2)
 
     ax7.set_xlabel('Normalized u', fontsize=10)
-    ax7.set_ylabel('Count', fontsize=10)
-    ax7.set_title(f'U-Space Near Upper (u > 0.98)\n{len(u_zoom_upper):,} samples',
+    ax7.set_ylabel('Count (log scale)', fontsize=10)
+    ax7.set_yscale('log')
+    ax7.set_title(f'U-Space Near Upper (LOG, u > 0.98)\n{len(u_zoom_upper):,} samples',
                   fontsize=11, fontweight='bold')
     ax7.legend(fontsize=8, loc='upper left')
-    ax7.grid(True, alpha=0.2, zorder=0)
+    ax7.grid(True, alpha=0.2, which='both', zorder=0)
 else:
     ax7.text(0.5, 0.5, 'No samples in range', ha='center', va='center',
              transform=ax7.transAxes)
