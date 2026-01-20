@@ -330,6 +330,7 @@ def plot_quantile_spacing_overlays(
     n_tols: int = 11,
     q_max: float = 0.1,
     n_quantiles: int = 100,
+    use_alpha: bool = True,
     config: PlotConfig | None = None,
 ) -> Figure:
     """Plot quantile spacing near zero with tolerance overlays.
@@ -350,6 +351,8 @@ def plot_quantile_spacing_overlays(
         n_tols: Number of tolerances if tols is None.
         q_max: Maximum quantile to show (0.1 = first 10%).
         n_quantiles: Number of quantile points.
+        use_alpha: If True, use alpha gradient (base=1.0, top=0.3).
+                   If False, all layers use alpha=1.0 (fully opaque).
         config: PlotConfig for styling. If None, uses PlotConfig().
 
     Returns:
@@ -386,7 +389,10 @@ def plot_quantile_spacing_overlays(
     norm = Normalize(vmin=tols[0], vmax=tols[-1])
 
     # Create alpha gradient for visibility
-    alphas = np.linspace(0.2, 0.7, len(tols))
+    if use_alpha:
+        alphas = np.linspace(1.0, 0.3, len(tols))
+    else:
+        alphas = np.ones(len(tols))
 
     # Track median spacing for tol=0 (for reference line)
     median_spacing_ref = None
@@ -486,6 +492,7 @@ def plot_ecdf_tolerance_overlays(
     tols: np.ndarray | None = None,
     n_tols: int = 11,
     side: Literal["lower", "upper", "both"] = "lower",
+    use_alpha: bool = True,
     config: PlotConfig | None = None,
 ) -> Figure:
     """Plot ECDF near boundaries with tolerance-colored overlays.
@@ -497,6 +504,8 @@ def plot_ecdf_tolerance_overlays(
         tols: Array of tolerance values. If None, uses linspace(0, 0.05, n_tols).
         n_tols: Number of tolerances if tols is None.
         side: Which boundary to visualize ("lower", "upper", or "both").
+        use_alpha: If True, use alpha gradient (base=1.0, top=0.3).
+                   If False, all layers use alpha=1.0 (fully opaque).
         config: PlotConfig for styling.
 
     Returns:
@@ -537,7 +546,10 @@ def plot_ecdf_tolerance_overlays(
     norm = Normalize(vmin=tols[0], vmax=tols[-1])
 
     # Setup alpha values (varying transparency)
-    alphas = np.linspace(0.2, 0.7, len(tols))
+    if use_alpha:
+        alphas = np.linspace(1.0, 0.3, len(tols))
+    else:
+        alphas = np.ones(len(tols))
 
     # Plot lower boundary ECDF
     if side in ["lower", "both"]:
@@ -628,6 +640,7 @@ def plot_histogram_tolerance_overlays(
     tols: np.ndarray | None = None,
     n_tols: int = 11,
     bins: int = 100,
+    use_alpha: bool = True,
     config: PlotConfig | None = None,
 ) -> Figure:
     """Plot histogram overlays showing effect of boundary tolerance cuts.
@@ -638,7 +651,7 @@ def plot_histogram_tolerance_overlays(
 
     Histograms are colored by tolerance using a colormap with colorbar.
     Higher tolerances (stricter cuts) have higher zorder (drawn on top).
-    Uses varying alpha: low tolerance = faint (alpha=0.2), high tolerance = opaque (alpha=0.7).
+    By default, uses varying alpha: low tolerance = opaque (alpha=1.0), high tolerance = transparent (alpha=0.3).
 
     Args:
         x: Array of parameter values.
@@ -647,6 +660,8 @@ def plot_histogram_tolerance_overlays(
         tols: Array of tolerance values to plot. If None, uses linspace(0, 0.05, n_tols).
         n_tols: Number of tolerances if tols is None.
         bins: Number of histogram bins.
+        use_alpha: If True, use alpha gradient (base=1.0, top=0.3).
+                   If False, all layers use alpha=1.0 (fully opaque).
         config: PlotConfig for styling. Uses defaults if None.
 
     Returns:
@@ -677,7 +692,10 @@ def plot_histogram_tolerance_overlays(
     bin_edges = np.linspace(L, U, bins + 1)
 
     # Compute alphas
-    alphas = np.linspace(0.2, 0.7, len(tols))
+    if use_alpha:
+        alphas = np.linspace(1.0, 0.3, len(tols))
+    else:
+        alphas = np.ones(len(tols))
 
     # Get colors for each tolerance
     colors = [cmap(norm(t)) for t in tols]
