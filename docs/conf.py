@@ -69,12 +69,18 @@ napoleon_attr_annotations = True
 
 # -- Options for intersphinx -------------------------------------------------
 
+# Use local inventory fallbacks for reliable CI builds and offline development.
+# The tuple (None, "path") means: try remote first, fall back to local.
+# Run `python scripts/update_intersphinx.py` to update local inventories.
 intersphinx_mapping = {
-    "python": ("https://docs.python.org/3", None),
-    "numpy": ("https://numpy.org/doc/stable/", None),
-    "scipy": ("https://docs.scipy.org/doc/scipy/", None),
-    "matplotlib": ("https://matplotlib.org/stable/", None),
+    "python": ("https://docs.python.org/3", (None, "_intersphinx/python.inv")),
+    "numpy": ("https://numpy.org/doc/stable/", (None, "_intersphinx/numpy.inv")),
+    "scipy": ("https://docs.scipy.org/doc/scipy/", (None, "_intersphinx/scipy.inv")),
+    "matplotlib": ("https://matplotlib.org/stable/", (None, "_intersphinx/matplotlib.inv")),
 }
+
+# Timeout for fetching remote inventories (seconds)
+intersphinx_timeout = 10
 
 # -- Options for HTML output -------------------------------------------------
 
