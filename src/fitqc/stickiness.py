@@ -128,6 +128,12 @@ def _validate_mode_bounds(
     elif mode == "upper":
         if U is None:
             raise ValueError("mode='upper' requires U to be specified.")
+    elif mode == "boundary":
+        if L is None or U is None:
+            raise ValueError(
+                "mode='boundary' requires both L and U to be specified. "
+                "For single-boundary checks, use mode='lower' or mode='upper'."
+            )
     elif mode == "all":
         # All mode needs at least partial bounds for boundary checks
         if L is None and U is None:
@@ -136,8 +142,10 @@ def _validate_mode_bounds(
                     "mode='all' requires at least one bound (L or U), "
                     "or scale parameter for interior check."
                 )
-    elif mode not in ("interior", "lower", "upper", "all"):
-        raise ValueError(f"Invalid mode: '{mode}'. Use 'interior', 'lower', 'upper', or 'all'.")
+    elif mode not in ("interior", "lower", "upper", "boundary", "all"):
+        raise ValueError(
+            f"Invalid mode: '{mode}'. Use 'interior', 'lower', 'upper', 'boundary', or 'all'."
+        )
 
 
 def detect_stickiness(
@@ -145,7 +153,7 @@ def detect_stickiness(
     ref: float,
     L: float | None,
     U: float | None,
-    mode: Literal["interior", "lower", "upper", "all"] = "all",
+    mode: Literal["interior", "lower", "upper", "boundary", "all"] = "all",
     scale: float | Literal["std", "iqr", "range"] | None = None,
     interior_config: InteriorConfig | None = None,
     boundary_config: BoundaryConfig | None = None,
@@ -169,12 +177,13 @@ def detect_stickiness(
         Lower bound of parameter range. None if unbounded below.
     U : float or None
         Upper bound of parameter range. None if unbounded above.
-    mode : {'interior', 'lower', 'upper', 'all'}, default 'all'
+    mode : {'interior', 'lower', 'upper', 'boundary', 'all'}, default 'all'
         Which stickiness check to perform:
         - 'interior': Check for stickiness at x0 (initial guess)
         - 'lower': Check for pileup at lower bound
         - 'upper': Check for pileup at upper bound
-        - 'all': Perform all checks
+        - 'boundary': Check for pileup at both lower and upper bounds
+        - 'all': Perform all checks (interior + boundary)
     scale : float or {'std', 'iqr', 'range'} or None, default None
         Normalization scale for unbounded parameters.
         - Required when L or U is None for interior mode
@@ -193,6 +202,7 @@ def detect_stickiness(
     InteriorResult or BoundaryResult or tuple[InteriorResult, BoundaryResult]
         - mode='interior': InteriorResult
         - mode='lower' or 'upper': BoundaryResult (with other direction's fields as None)
+        - mode='boundary': BoundaryResult (with both lower and upper fields populated)
         - mode='all': tuple of (InteriorResult, BoundaryResult)
 
     Raises
@@ -213,6 +223,12 @@ def detect_stickiness(
 
     >>> interior, boundary = detect_stickiness(x, ref=5.0, L=0.0, U=10.0, mode="all")
 
+    Check both boundaries without interior (faster):
+
+    >>> result = detect_stickiness(x, ref=5.0, L=0.0, U=10.0, mode="boundary")
+    >>> result.lower_pileup_detected, result.upper_pileup_detected
+    (False, False)
+
     Unbounded parameter with scale:
 
     >>> result = detect_stickiness(x, ref=5.0, L=None, U=None, mode="interior", scale="std")
@@ -227,6 +243,8 @@ def detect_stickiness(
         return _run_lower(x, L, U, boundary_config)
     elif mode == "upper":
         return _run_upper(x, L, U, boundary_config)
+    elif mode == "boundary":
+        return _run_boundary(x, L, U, boundary_config)
     elif mode == "all":
         return _run_all(x, ref, L, U, scale, interior_config, boundary_config)
     else:
@@ -305,6 +323,37 @@ def _run_upper(
         lower_mass_curve=None,
         upper_mass_curve=full_result.upper_mass_curve,
     )
+
+
+def _run_boundary(
+    x: NDArray[np.floating],
+    L: float,
+    U: float,
+    config: BoundaryConfig | None,
+) -> BoundaryResult:
+    """Run boundary check for both lower and upper bounds.
+
+    This mode checks for pileup at both boundaries without running
+    interior (x0 stickiness) detection. Use this when you only care
+    about boundary behavior and want to skip interior QC overhead.
+
+    Parameters
+    ----------
+    x : NDArray[np.floating]
+        Parameter values to analyze.
+    L : float
+        Lower bound (required).
+    U : float
+        Upper bound (required).
+    config : BoundaryConfig | None
+        Configuration for boundary detection.
+
+    Returns
+    -------
+    BoundaryResult
+        Result with both lower and upper pileup detection populated.
+    """
+    return run_boundary_qc(x, L=L, U=U, config=config)
 
 
 def _run_all(

@@ -174,6 +174,17 @@ class TestModeDispatch:
         assert isinstance(result[0], InteriorResult)
         assert isinstance(result[1], BoundaryResult)
 
+    def test_mode_boundary_returns_boundary_result(self, uniform_data):
+        """mode='boundary' should return BoundaryResult."""
+        from fitqc.stickiness import detect_stickiness
+
+        result = detect_stickiness(uniform_data, ref=5.0, L=0.0, U=10.0, mode="boundary")
+
+        assert isinstance(result, BoundaryResult)
+        assert isinstance(result.lower_pileup_detected, bool)
+        assert isinstance(result.upper_pileup_detected, bool)
+        assert isinstance(result.tol_grid, np.ndarray)
+
 
 # =============================================================================
 # 3. Boundary Mode Field Nulling Tests
@@ -292,6 +303,77 @@ class TestAllModeStructure:
         assert isinstance(boundary.upper_mass_curve, np.ndarray)
         assert boundary.lower_mass_curve.shape[0] > 0
         assert boundary.upper_mass_curve.shape[0] > 0
+
+
+# =============================================================================
+# 4a. Boundary Mode Structure Tests
+# =============================================================================
+
+
+class TestBoundaryModeStructure:
+    """Tests for mode='boundary' structure and content."""
+
+    def test_boundary_mode_has_both_lower_and_upper(self, uniform_data):
+        """mode='boundary' should populate both lower and upper fields."""
+        from fitqc.stickiness import detect_stickiness
+
+        result = detect_stickiness(uniform_data, ref=5.0, L=0.0, U=10.0, mode="boundary")
+
+        # Both lower fields must be populated
+        assert isinstance(result.lower_pileup_detected, bool)
+        assert isinstance(result.tol_grid, np.ndarray)
+        assert result.tol_grid.shape[0] > 0
+        assert isinstance(result.lower_mass_curve, np.ndarray)
+        np.testing.assert_array_equal(result.tol_grid.shape, result.lower_mass_curve.shape)
+
+        # Both upper fields must be populated
+        assert isinstance(result.upper_pileup_detected, bool)
+        assert isinstance(result.upper_mass_curve, np.ndarray)
+        np.testing.assert_array_equal(result.tol_grid.shape, result.upper_mass_curve.shape)
+
+        # Both mass curves should be monotonically increasing
+        assert np.all(np.diff(result.lower_mass_curve) >= 0)
+        assert np.all(np.diff(result.upper_mass_curve) >= 0)
+
+    def test_boundary_mode_matches_run_boundary_qc_directly(self, uniform_data):
+        """mode='boundary' result should match run_boundary_qc directly."""
+        from fitqc.stickiness import detect_stickiness
+
+        wrapper_result = detect_stickiness(uniform_data, ref=5.0, L=0.0, U=10.0, mode="boundary")
+        direct_result = run_boundary_qc(uniform_data, L=0.0, U=10.0)
+
+        # Field-by-field equality check
+        assert wrapper_result.lower_pileup_detected == direct_result.lower_pileup_detected
+        assert wrapper_result.upper_pileup_detected == direct_result.upper_pileup_detected
+        assert wrapper_result.t_lo_star == direct_result.t_lo_star
+        assert wrapper_result.t_hi_star == direct_result.t_hi_star
+        np.testing.assert_array_equal(wrapper_result.tol_grid, direct_result.tol_grid)
+        np.testing.assert_array_equal(
+            wrapper_result.lower_mass_curve, direct_result.lower_mass_curve
+        )
+        np.testing.assert_array_equal(
+            wrapper_result.upper_mass_curve, direct_result.upper_mass_curve
+        )
+
+    def test_boundary_mode_matches_mode_all_boundary_part(self, uniform_data):
+        """mode='boundary' should match the boundary part of mode='all'."""
+        from fitqc.stickiness import detect_stickiness
+
+        boundary_direct = detect_stickiness(uniform_data, ref=5.0, L=0.0, U=10.0, mode="boundary")
+        _, boundary_from_all = detect_stickiness(uniform_data, ref=5.0, L=0.0, U=10.0, mode="all")
+
+        # Should produce identical results
+        assert boundary_direct.lower_pileup_detected == boundary_from_all.lower_pileup_detected
+        assert boundary_direct.upper_pileup_detected == boundary_from_all.upper_pileup_detected
+        assert boundary_direct.t_lo_star == boundary_from_all.t_lo_star
+        assert boundary_direct.t_hi_star == boundary_from_all.t_hi_star
+        np.testing.assert_array_equal(boundary_direct.tol_grid, boundary_from_all.tol_grid)
+        np.testing.assert_array_equal(
+            boundary_direct.lower_mass_curve, boundary_from_all.lower_mass_curve
+        )
+        np.testing.assert_array_equal(
+            boundary_direct.upper_mass_curve, boundary_from_all.upper_mass_curve
+        )
 
 
 # =============================================================================
@@ -594,8 +676,8 @@ class TestValidationErrors:
         """Invalid mode error should mention valid alternatives."""
         from fitqc.stickiness import detect_stickiness
 
-        with pytest.raises(ValueError, match=r"'interior'.*'lower'.*'upper'.*'all'"):
-            detect_stickiness(uniform_data, ref=5.0, L=0.0, U=10.0, mode="boundary")
+        with pytest.raises(ValueError, match=r"'interior'.*'lower'.*'upper'.*'boundary'.*'all'"):
+            detect_stickiness(uniform_data, ref=5.0, L=0.0, U=10.0, mode="invalid_mode")
 
     def test_lower_mode_requires_L(self, uniform_data):
         """mode='lower' requires L to be specified."""
@@ -610,6 +692,22 @@ class TestValidationErrors:
 
         with pytest.raises(ValueError, match=r"mode='upper' requires U"):
             detect_stickiness(uniform_data, ref=5.0, L=0.0, U=None, mode="upper")
+
+    def test_boundary_mode_requires_both_L_and_U(self, uniform_data):
+        """mode='boundary' requires both L and U to be specified."""
+        from fitqc.stickiness import detect_stickiness
+
+        # Missing L
+        with pytest.raises(ValueError, match=r"mode='boundary' requires both L and U"):
+            detect_stickiness(uniform_data, ref=5.0, L=None, U=10.0, mode="boundary")
+
+        # Missing U
+        with pytest.raises(ValueError, match=r"mode='boundary' requires both L and U"):
+            detect_stickiness(uniform_data, ref=5.0, L=0.0, U=None, mode="boundary")
+
+        # Missing both
+        with pytest.raises(ValueError, match=r"mode='boundary' requires both L and U"):
+            detect_stickiness(uniform_data, ref=5.0, L=None, U=None, mode="boundary")
 
     def test_interior_without_bounds_or_scale_raises(self, uniform_data):
         """mode='interior' without bounds or scale should raise."""
@@ -732,6 +830,30 @@ class TestConfigPassthrough:
         assert len(interior.eps_grid) == 75
         assert len(boundary.tol_grid) == 80
 
+    def test_boundary_config_affects_boundary_mode(self, uniform_data):
+        """Custom BoundaryConfig should affect mode='boundary' result."""
+        from fitqc.stickiness import detect_stickiness
+
+        # Default config
+        result_default = detect_stickiness(uniform_data, ref=5.0, L=0.0, U=10.0, mode="boundary")
+
+        # Custom config with different n_tols
+        custom_config = BoundaryConfig(n_tols=100)
+        result_custom = detect_stickiness(
+            uniform_data,
+            ref=5.0,
+            L=0.0,
+            U=10.0,
+            mode="boundary",
+            boundary_config=custom_config,
+        )
+
+        # Verify config affected the result
+        assert len(result_default.tol_grid) == 41  # default n_tols
+        assert len(result_custom.tol_grid) == 100  # custom n_tols
+        assert len(result_custom.lower_mass_curve) == 100
+        assert len(result_custom.upper_mass_curve) == 100
+
 
 # =============================================================================
 # 8. Detection Correctness Tests
@@ -820,6 +942,59 @@ class TestDetectionCorrectness:
         if boundary.t_hi_star is not None:
             assert boundary.t_hi_star < 0.01
 
+    def test_boundary_mode_detects_lower_pileup(self, data_with_lower_pileup):
+        """mode='boundary' should detect pileup at lower boundary."""
+        from fitqc.stickiness import detect_stickiness
+
+        result = detect_stickiness(data_with_lower_pileup, ref=5.0, L=0.0, U=10.0, mode="boundary")
+
+        assert result.lower_pileup_detected is True
+        assert result.t_lo_star is not None
+        assert result.t_lo_star > 0.005
+
+    def test_boundary_mode_detects_upper_pileup(self, data_with_upper_pileup):
+        """mode='boundary' should detect pileup at upper boundary."""
+        from fitqc.stickiness import detect_stickiness
+
+        result = detect_stickiness(data_with_upper_pileup, ref=5.0, L=0.0, U=10.0, mode="boundary")
+
+        assert result.upper_pileup_detected is True
+        assert result.t_hi_star is not None
+        assert result.t_hi_star > 0.005
+
+    def test_boundary_mode_detects_both_pileups(self, rng):
+        """mode='boundary' should detect pileup at both boundaries simultaneously."""
+        from fitqc.stickiness import detect_stickiness
+
+        # Create data with pileup at BOTH boundaries
+        x = rng.uniform(0, 10, size=10000)
+        # Add 5% pileup at lower bound
+        x[:500] = rng.uniform(0, 0.1, size=500)
+        # Add 5% pileup at upper bound
+        x[500:1000] = rng.uniform(9.9, 10.0, size=500)
+
+        result = detect_stickiness(x, ref=5.0, L=0.0, U=10.0, mode="boundary")
+
+        # Both should be detected
+        assert result.lower_pileup_detected is True
+        assert result.upper_pileup_detected is True
+        assert result.t_lo_star is not None
+        assert result.t_hi_star is not None
+        assert result.t_lo_star > 0.005
+        assert result.t_hi_star > 0.005
+
+    def test_boundary_mode_no_false_positive_uniform(self, uniform_data):
+        """mode='boundary' should not trigger false positives on uniform data."""
+        from fitqc.stickiness import detect_stickiness
+
+        result = detect_stickiness(uniform_data, ref=5.0, L=0.0, U=10.0, mode="boundary")
+
+        # Uniform data should not have significant pileup
+        if result.t_lo_star is not None:
+            assert result.t_lo_star < 0.01
+        if result.t_hi_star is not None:
+            assert result.t_hi_star < 0.01
+
 
 # =============================================================================
 # 9. Array Properties Tests
@@ -882,6 +1057,34 @@ class TestArrayProperties:
         assert np.all(boundary.lower_mass_curve <= 1)
         assert np.all(boundary.upper_mass_curve >= 0)
         assert np.all(boundary.upper_mass_curve <= 1)
+
+    def test_boundary_mode_array_properties(self, uniform_data):
+        """mode='boundary' arrays should have correct dtype, shape, and properties."""
+        from fitqc.stickiness import detect_stickiness
+
+        result = detect_stickiness(uniform_data, ref=5.0, L=0.0, U=10.0, mode="boundary")
+
+        # tol_grid properties
+        assert result.tol_grid.dtype == np.float64
+        assert result.tol_grid.ndim == 1
+        assert result.tol_grid.shape[0] == 41  # default n_tols
+        assert np.all(np.diff(result.tol_grid) > 0)  # monotonically increasing
+
+        # lower_mass_curve properties
+        assert result.lower_mass_curve.dtype == np.float64
+        assert result.lower_mass_curve.ndim == 1
+        assert result.lower_mass_curve.shape == result.tol_grid.shape
+        assert np.all(result.lower_mass_curve >= 0)
+        assert np.all(result.lower_mass_curve <= 1)
+        assert np.all(np.diff(result.lower_mass_curve) >= 0)
+
+        # upper_mass_curve properties
+        assert result.upper_mass_curve.dtype == np.float64
+        assert result.upper_mass_curve.ndim == 1
+        assert result.upper_mass_curve.shape == result.tol_grid.shape
+        assert np.all(result.upper_mass_curve >= 0)
+        assert np.all(result.upper_mass_curve <= 1)
+        assert np.all(np.diff(result.upper_mass_curve) >= 0)
 
 
 # =============================================================================
@@ -1117,3 +1320,34 @@ class TestEdgeCases:
         # std of constant data is 0, which is non-positive
         with pytest.raises(ValueError, match=r"non-positive"):
             detect_stickiness(x, ref=5.0, L=None, U=None, mode="interior", scale="std")
+
+
+# =============================================================================
+# 11. Boundary Mode Performance Tests
+# =============================================================================
+
+
+class TestBoundaryModeDoesNotRunInterior:
+    """Critical test: mode='boundary' must NOT run interior QC."""
+
+    def test_boundary_mode_does_not_call_run_interior_qc(self, monkeypatch, uniform_data):
+        """mode='boundary' must NOT call run_interior_qc (performance requirement)."""
+        from fitqc import stickiness
+        from fitqc.stickiness import detect_stickiness
+
+        # Track whether run_interior_qc was called
+        called = []
+        original = stickiness.run_interior_qc
+
+        def mock_interior(*args, **kwargs):
+            called.append(True)
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(stickiness, "run_interior_qc", mock_interior)
+
+        result = detect_stickiness(uniform_data, ref=5.0, L=0.0, U=10.0, mode="boundary")
+
+        assert len(called) == 0, "run_interior_qc was called but should not be for mode='boundary'"
+        assert isinstance(result, BoundaryResult)
+        assert isinstance(result.lower_pileup_detected, bool)
+        assert isinstance(result.upper_pileup_detected, bool)
