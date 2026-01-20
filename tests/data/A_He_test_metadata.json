@@ -17,7 +17,7 @@
     "L": 0.0,
     "U": 25.0,
     "expected_lower_stickiness": true,
-    "expected_upper_stickiness": false,
+    "expected_upper_stickiness": true,
     "expected_interior_stickiness": true
   },
   "n_samples_full": 7549989,
