@@ -47,6 +47,15 @@ def _aggregate_elbows_median(
         >>> _aggregate_elbows_median(elbows)
         None
     """
+    # Handle edge case: empty list
+    if len(elbows) == 0:
+        return None
+
+    # Handle edge case: single element (agreement check meaningless for len=1)
+    if len(elbows) == 1:
+        return elbows[0]  # Returns value or None directly
+
+    # Multi-element case: original logic
     # Filter out None values to get valid elbows
     valid_elbows = [e for e in elbows if e is not None]
 

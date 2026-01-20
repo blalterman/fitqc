@@ -318,10 +318,15 @@ class TestConfigurableThresholds:
         - Thresholds not propagated to detection logic
         - Default values used instead of custom values
         """
-        # Mock returns typical values
+        # Mock returns typical values (must match 26-point quantile grid)
+        # Generate 26 mock tolerance values
+        mock_tol_values = np.linspace(0.001, 0.025, 26)
+        # Generate 26 mock elbow values (one per quantile)
+        mock_elbows = list(mock_tol_values)
+
         mock_compute.return_value = (
-            np.array([0.001, 0.005, 0.01, 0.02]),  # tol_at_quantile
-            [0.015]  # elbows_per_quantile
+            mock_tol_values,  # tol_at_quantile (26 elements)
+            mock_elbows       # elbows_per_quantile (26 elements)
         )
 
         # Create config with CUSTOM thresholds (different from defaults)

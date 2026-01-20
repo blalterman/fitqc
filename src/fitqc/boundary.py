@@ -83,6 +83,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
+from fitqc._quantile_utils import _aggregate_elbows_median
 from fitqc.config import BoundaryConfig
 from fitqc.selection import select_elbow
 from fitqc.sortedops import tail_mass
@@ -207,44 +208,6 @@ def _compute_quantile_curves_boundary(
     return tol_at_quantile, elbows_per_quantile
 
 
-def _aggregate_elbows_median(
-    elbows: list[float | None], min_agreement_frac: float = 0.5
-) -> float | None:
-    """Aggregate multiple elbow estimates via median.
-
-    This is a temporary stub that will be replaced by the shared implementation
-    from Agent 3 in src/fitqc/_quantile_utils.py. For now, provides basic
-    median aggregation functionality.
-
-    Args:
-        elbows: List of elbow estimates, potentially containing None values.
-        min_agreement_frac: Minimum fraction of non-None elbows required
-            for a valid result (default 0.5 = 50%).
-
-    Returns:
-        Median of valid elbows if sufficient agreement, else None.
-
-    Examples:
-        >>> # Majority agree
-        >>> elbows = [0.010, 0.011, 0.009, 0.010, None, 0.011]
-        >>> result = _aggregate_elbows_median(elbows)
-        >>> result is not None
-        True
-
-        >>> # Insufficient agreement (<50% valid)
-        >>> elbows = [0.010, None, None, None, 0.012]
-        >>> result = _aggregate_elbows_median(elbows, min_agreement_frac=0.5)
-        >>> result is None
-        True
-    """
-    valid_elbows = [e for e in elbows if e is not None]
-
-    if len(valid_elbows) < min_agreement_frac * len(elbows):
-        return None  # Insufficient agreement
-
-    return float(np.median(valid_elbows))
-
-
 def compute_u(x: np.ndarray, L: float, U: float) -> np.ndarray:
     """Compute normalized position in the parameter range [L, U].
 
@@ -281,6 +244,133 @@ def compute_u(x: np.ndarray, L: float, U: float) -> np.ndarray:
     return (x - L) / (U - L)
 
 
+def _refine_quantile_grid_around_elbow(
+    quantile_grid: np.ndarray,
+    elbow_quantile: float,
+    n_points: int = 15
+) -> np.ndarray:
+    """Add intermediate points around an elbow for better resolution.
+
+    Args:
+        quantile_grid: Current quantile grid.
+        elbow_quantile: The quantile value where the elbow was detected.
+        n_points: Number of points to add around the elbow.
+
+    Returns:
+        Refined quantile grid with additional points near the elbow.
+
+    Strategy:
+        1. Find the two grid points bracketing the elbow
+        2. Add n_points evenly spaced between them
+        3. Merge with original grid and sort
+        4. Remove duplicates
+    """
+    # Find bracketing indices
+    idx = np.searchsorted(quantile_grid, elbow_quantile)
+
+    # Edge case: elbow at first quantile (idx == 0)
+    if idx == 0:
+        # Add points between grid[0] and grid[1]
+        if len(quantile_grid) > 1:
+            q_left = quantile_grid[0]
+            q_right = quantile_grid[1]
+        else:
+            # Single-point grid - can't refine
+            return quantile_grid
+    # Edge case: elbow at or beyond last quantile
+    elif idx >= len(quantile_grid):
+        # Add points between grid[-2] and grid[-1]
+        if len(quantile_grid) > 1:
+            q_left = quantile_grid[-2]
+            q_right = quantile_grid[-1]
+        else:
+            return quantile_grid
+    # Normal case: elbow between two points
+    else:
+        q_left = quantile_grid[idx - 1]
+        q_right = quantile_grid[idx]
+
+    # Generate intermediate points
+    # Use linspace to get n_points BETWEEN the brackets (exclude endpoints)
+    new_points = np.linspace(q_left, q_right, n_points + 2)[1:-1]
+
+    # Merge with original grid
+    refined_grid = np.concatenate([quantile_grid, new_points])
+
+    # Sort and remove duplicates
+    refined_grid = np.unique(refined_grid)
+
+    return refined_grid
+
+
+def _refine_elbow_iteratively(
+    u_sorted: np.ndarray,
+    tol_grid: np.ndarray,
+    quantile_grid: np.ndarray,
+    max_iterations: int = 5,
+    convergence_tol: float = 1e-6
+) -> tuple[float | None, np.ndarray]:
+    """Iteratively refine quantile grid to improve elbow detection.
+
+    Args:
+        u_sorted: Sorted normalized parameter values.
+        tol_grid: Tolerance grid for computing mass curves.
+        quantile_grid: Initial quantile grid.
+        max_iterations: Maximum refinement iterations.
+        convergence_tol: Elbow change threshold for convergence.
+
+    Returns:
+        Tuple of (final_elbow, final_quantile_grid).
+    """
+    current_grid = quantile_grid.copy()
+    previous_elbow = None
+    tol_max = tol_grid[-1]
+    # Reject elbows within 1% of tol_max (likely boundary artifacts)
+    tol_max_threshold = tol_max * 0.99
+
+    for iteration in range(max_iterations):
+        # Compute quantile curves with current grid
+        tol_at_quantile, elbows = _compute_quantile_curves_boundary(
+            u_sorted, tol_grid, current_grid
+        )
+
+        # Filter out elbows that are too close to tol_max (boundary artifacts)
+        filtered_elbows = [
+            e if (e is not None and e < tol_max_threshold) else None
+            for e in elbows
+        ]
+
+        # Aggregate elbows
+        from fitqc._quantile_utils import _aggregate_elbows_median
+        current_elbow = _aggregate_elbows_median(filtered_elbows, min_agreement_frac=0.5)
+
+        # If no elbow found, stop iteration
+        if current_elbow is None:
+            return None, current_grid
+
+        # Check convergence
+        if previous_elbow is not None:
+            if abs(current_elbow - previous_elbow) < convergence_tol:
+                # Converged
+                return current_elbow, current_grid
+
+        # Refine grid around current elbow
+        # Find which quantile corresponds to this tolerance
+        # We need to find q such that tol_at_quantile[q] ≈ current_elbow
+        idx = np.argmin(np.abs(tol_at_quantile - current_elbow))
+        elbow_quantile = current_grid[idx]
+
+        # Refine grid
+        current_grid = _refine_quantile_grid_around_elbow(
+            current_grid, elbow_quantile, n_points=15
+        )
+
+        previous_elbow = current_elbow
+
+    # Max iterations reached - return last result
+    return current_elbow, current_grid
+
+
 @dataclass
 class BoundaryResult:
     """Result of boundary QC analysis."""
@@ -301,6 +391,10 @@ class BoundaryResult:
     upper_mass_curve: np.ndarray
     #: Quantile elbow data (only with use_quantile_analysis=True).
     quantile_elbows: dict[str, dict[float, float | None]] | None = None
+    #: Refined quantile grid for lower boundary (only with refine_transition=True).
+    quantile_grid_refined_lower: np.ndarray | None = None
+    #: Refined quantile grid for upper boundary (only with refine_transition=True).
+    quantile_grid_refined_upper: np.ndarray | None = None
 
 
 def run_boundary_qc(
@@ -346,35 +440,67 @@ def run_boundary_qc(
 
     # Initialize quantile_elbows as None (will be populated if multi-curve enabled)
     quantile_elbows_result = None
+    quantile_grid_refined_lower = None
+    quantile_grid_refined_upper = None
 
     # Choose detection method based on config
     if config.use_quantile_analysis:
         # Multi-curve quantile analysis
         quantile_grid_arr = np.array(config.quantile_grid)
 
-        # Compute quantile curves for lower boundary
-        tol_at_quantile_lower, elbows_lower = _compute_quantile_curves_boundary(
-            u_sorted, tol_grid, quantile_grid_arr
-        )
+        if config.refine_transition:
+            # Iterative refinement mode
+            t_lo_raw, quantile_grid_refined_lower = _refine_elbow_iteratively(
+                u_sorted, tol_grid, quantile_grid_arr, max_iterations=5
+            )
+            t_hi_raw, quantile_grid_refined_upper = _refine_elbow_iteratively(
+                one_minus_u_sorted, tol_grid, quantile_grid_arr, max_iterations=5
+            )
 
-        # Compute quantile curves for upper boundary
-        tol_at_quantile_upper, elbows_upper = _compute_quantile_curves_boundary(
-            one_minus_u_sorted, tol_grid, quantile_grid_arr
-        )
+            # Compute final quantile curves with refined grids for diagnostics
+            if quantile_grid_refined_lower is not None:
+                tol_at_quantile_lower, elbows_lower = _compute_quantile_curves_boundary(
+                    u_sorted, tol_grid, quantile_grid_refined_lower
+                )
+            else:
+                tol_at_quantile_lower = np.array([])
+                elbows_lower = []
 
-        # Aggregate elbows via median
-        t_lo_raw = _aggregate_elbows_median(elbows_lower, config.min_quantile_agreement)
-        t_hi_raw = _aggregate_elbows_median(elbows_upper, config.min_quantile_agreement)
+            if quantile_grid_refined_upper is not None:
+                tol_at_quantile_upper, elbows_upper = _compute_quantile_curves_boundary(
+                    one_minus_u_sorted, tol_grid, quantile_grid_refined_upper
+                )
+            else:
+                tol_at_quantile_upper = np.array([])
+                elbows_upper = []
+        else:
+            # Single-pass quantile analysis (no refinement)
+            # Compute quantile curves for lower boundary
+            tol_at_quantile_lower, elbows_lower = _compute_quantile_curves_boundary(
+                u_sorted, tol_grid, quantile_grid_arr
+            )
 
-        # Store quantile elbows for diagnostics
+            # Compute quantile curves for upper boundary
+            tol_at_quantile_upper, elbows_upper = _compute_quantile_curves_boundary(
+                one_minus_u_sorted, tol_grid, quantile_grid_arr
+            )
+
+            # Aggregate elbows via median
+            t_lo_raw = _aggregate_elbows_median(elbows_lower, config.min_quantile_agreement)
+            t_hi_raw = _aggregate_elbows_median(elbows_upper, config.min_quantile_agreement)
+
+        # Store quantile elbows for diagnostics (use refined grid if available)
+        grid_for_diagnostics_lower = quantile_grid_refined_lower if quantile_grid_refined_lower is not None else quantile_grid_arr
+        grid_for_diagnostics_upper = quantile_grid_refined_upper if quantile_grid_refined_upper is not None else quantile_grid_arr
+
         quantile_elbows_result = {
             "lower": {
                 float(q): float(tol)
-                for q, tol in zip(quantile_grid_arr, tol_at_quantile_lower, strict=True)
+                for q, tol in zip(grid_for_diagnostics_lower, tol_at_quantile_lower, strict=True)
             },
             "upper": {
                 float(q): float(tol)
-                for q, tol in zip(quantile_grid_arr, tol_at_quantile_upper, strict=True)
+                for q, tol in zip(grid_for_diagnostics_upper, tol_at_quantile_upper, strict=True)
             },
         }
     else:
@@ -400,8 +526,8 @@ def run_boundary_qc(
     # For uniform data, we expect P(u < tol) ≈ tol
     # Pileup means observed mass >> expected mass at the elbow
     # We use a ratio threshold: mass / tol > excess_ratio indicates pileup
-    pileup_threshold = 0.005  # minimum tolerance to consider
-    excess_ratio = 1.5  # mass must be at least 1.5x expected
+    pileup_threshold = config.pileup_threshold
+    excess_ratio = config.excess_ratio
 
     def check_excess_mass(
         t_star: float | None, mass_curve: np.ndarray
@@ -437,4 +563,6 @@ def run_boundary_qc(
         lower_mass_curve=lower_mass_curve,
         upper_mass_curve=upper_mass_curve,
         quantile_elbows=quantile_elbows_result,
+        quantile_grid_refined_lower=quantile_grid_refined_lower,
+        quantile_grid_refined_upper=quantile_grid_refined_upper,
     )

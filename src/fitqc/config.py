@@ -191,9 +191,40 @@ class BoundaryConfig:
     # Multi-curve quantile analysis (opt-in)
     use_quantile_analysis: bool = False  # Enable multi-curve robust threshold estimation
     quantile_grid: tuple[float, ...] = field(
-        default_factory=lambda: (0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.10)
-    )  # Quantiles to analyze for threshold detection
+        default_factory=lambda: (
+            # 0-1%: Very tight pileups (precision artifacts)
+            0.0005, 0.001, 0.0015, 0.002, 0.0025, 0.003, 0.004, 0.005, 0.007, 0.01,
+            # 1-2%: A_He transition zone - CRITICAL, dense coverage
+            0.011, 0.012, 0.013, 0.015, 0.017, 0.02,
+            # 2-5%: Moderate pileups
+            0.025, 0.03, 0.04, 0.05,
+            # 5-25%: Broad distribution tail
+            0.06, 0.08, 0.10, 0.15, 0.20, 0.25
+        )
+    )  # Quantiles to analyze for threshold detection (26 points for better resolution)
     min_quantile_agreement: float = 0.5  # Minimum fraction of quantiles that must agree
+
+    # Detection thresholds (Fix 4: Make these configurable)
+    pileup_threshold: float = 0.005  # Minimum tolerance to consider as pileup (0.5% of range)
+    excess_ratio: float = 1.5  # Mass must be at least N times expected for uniform
+
+    # Iterative refinement (Fix 5)
+    refine_transition: bool = False  # Enable iterative Kneedle refinement
+
+    def __post_init__(self) -> None:
+        """Validate configuration parameters."""
+        # Validate pileup_threshold
+        if not (0.0 <= self.pileup_threshold <= 0.1):
+            raise ValueError(
+                f"pileup_threshold must be in [0, 0.1], got {self.pileup_threshold}"
+            )
+
+        # Validate excess_ratio
+        if self.excess_ratio < 1.0:
+            raise ValueError(
+                f"excess_ratio must be >= 1.0 (1.0 = uniform baseline), "
+                f"got {self.excess_ratio}"
+            )
 
 
 @dataclass
