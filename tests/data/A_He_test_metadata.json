@@ -1,0 +1,26 @@
+{
+  "name": "A_He",
+  "x0": 0.0,
+  "L": 0.0,
+  "U": 25.0,
+  "units": "%",
+  "n_samples": 100000,
+  "source": "/Users/balterma/observatories/wind/pipeline/swe/swefc.h5:ppa12_apeq",
+  "initial_guess": {
+    "level_1": 0.0,
+    "level_6": 1.0,
+    "description": "Alpha abundance starts at 1% at Level 6, typically converges to 3-5%",
+    "source": "pa12_autofit_apeq.pro line 407"
+  },
+  "fitqc_test": {
+    "x0": 0.0,
+    "L": 0.0,
+    "U": 25.0,
+    "expected_lower_stickiness": true,
+    "expected_upper_stickiness": false,
+    "expected_interior_stickiness": true
+  },
+  "n_samples_full": 7549989,
+  "sample_seed": 42,
+  "sample_method": "uniform random without replacement"
+}
