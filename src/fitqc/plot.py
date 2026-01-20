@@ -761,6 +761,145 @@ def plot_histogram_tolerance_overlays(
     return fig
 
 
+def plot_bounds_filter_comparison(
+    x: np.ndarray,
+    L: float,
+    U: float,
+    bins: int | str = "auto",
+    config: PlotConfig | None = None,
+) -> Figure:
+    """Plot comparison of data before and after bounds filtering.
+
+    Creates high-resolution histograms showing:
+    - Original data (including out-of-bounds samples)
+    - Filtered data (only samples within [L, U])
+
+    Both histograms use the same binning for direct comparison. This
+    visualizes the effectiveness of the bounds validation filter.
+
+    Args:
+        x: Array of parameter values (unfiltered).
+        L: Lower bound of the parameter.
+        U: Upper bound of the parameter.
+        bins: Number of bins or binning strategy ('auto', 'fd', 'sturges', etc.).
+            Default is 'auto' which uses numpy's histogram bin selection.
+        config: PlotConfig for styling. Uses defaults if None.
+
+    Returns:
+        Figure with two subplots showing unfiltered and filtered distributions.
+
+    Examples:
+        >>> from fitqc.plot import plot_bounds_filter_comparison
+        >>> import numpy as np
+        >>> # Data with some out-of-bounds samples
+        >>> x = np.concatenate([
+        ...     np.zeros(100),  # Failed fits at 0
+        ...     np.random.uniform(0.01, 100, 9900)  # Valid data
+        ... ])
+        >>> fig = plot_bounds_filter_comparison(x, L=0.01, U=100.0, bins=200)
+        >>> fig.savefig("bounds_filter_comparison.png")
+    """
+    # Validate inputs
+    if L >= U:
+        raise ValueError(f"L must be less than U, got L={L}, U={U}")
+
+    # Handle defaults
+    if config is None:
+        config = PlotConfig()
+
+    # Filter non-finite values
+    x = x[np.isfinite(x)]
+
+    # Create filtered version
+    x_filtered = x[(x >= L) & (x <= U)]
+
+    # Count out-of-bounds samples
+    n_total = len(x)
+    n_below = np.sum(x < L)
+    n_above = np.sum(x > U)
+    n_out_of_bounds = n_below + n_above
+    n_filtered = len(x_filtered)
+
+    # Create figure with two subplots (vertical layout for easier comparison)
+    fig, axes = plt.subplots(2, 1, figsize=(10, 8), dpi=config.dpi)
+
+    # Determine bin edges from full data range for consistent binning
+    # Extend slightly beyond [L, U] to capture out-of-bounds samples
+    x_min = min(x.min(), L)
+    x_max = max(x.max(), U)
+
+    # Create bins
+    if isinstance(bins, str):
+        # Use numpy's histogram to determine bin edges
+        _, bin_edges = np.histogram(x, bins=bins, range=(x_min, x_max))
+    else:
+        bin_edges = np.linspace(x_min, x_max, bins + 1)
+
+    # Top subplot: Original (unfiltered) data
+    ax_unfiltered = axes[0]
+    counts_unfiltered, _, patches_unfiltered = ax_unfiltered.hist(
+        x,
+        bins=bin_edges,
+        histtype="stepfilled",
+        alpha=0.7,
+        color="steelblue",
+        edgecolor="black",
+        linewidth=0.5,
+    )
+
+    # Add vertical lines at bounds
+    ax_unfiltered.axvline(L, color="red", linestyle="--", linewidth=1.5, label=f"L={L}", alpha=0.7)
+    ax_unfiltered.axvline(U, color="red", linestyle="--", linewidth=1.5, label=f"U={U}", alpha=0.7)
+
+    # Add shading for out-of-bounds regions
+    y_max = counts_unfiltered.max() * 1.1
+    if n_below > 0:
+        ax_unfiltered.axvspan(x_min, L, alpha=0.2, color="red", label=f"Out-of-bounds (below L): {n_below}")
+    if n_above > 0:
+        ax_unfiltered.axvspan(U, x_max, alpha=0.2, color="red", label=f"Out-of-bounds (above U): {n_above}")
+
+    ax_unfiltered.set_xlabel("Parameter value")
+    ax_unfiltered.set_ylabel("Count")
+    ax_unfiltered.set_title(
+        f"Original Data (n={n_total:,}, out-of-bounds={n_out_of_bounds:,} [{n_out_of_bounds/n_total:.2%}])"
+    )
+    ax_unfiltered.grid(True, alpha=0.3)
+    ax_unfiltered.legend(loc="best", fontsize=8)
+
+    # Bottom subplot: Filtered data
+    ax_filtered = axes[1]
+    counts_filtered, _, patches_filtered = ax_filtered.hist(
+        x_filtered,
+        bins=bin_edges,
+        histtype="stepfilled",
+        alpha=0.7,
+        color="mediumseagreen",
+        edgecolor="black",
+        linewidth=0.5,
+    )
+
+    # Add vertical lines at bounds
+    ax_filtered.axvline(L, color="green", linestyle="--", linewidth=1.5, label=f"L={L}", alpha=0.7)
+    ax_filtered.axvline(U, color="green", linestyle="--", linewidth=1.5, label=f"U={U}", alpha=0.7)
+
+    ax_filtered.set_xlabel("Parameter value")
+    ax_filtered.set_ylabel("Count")
+    ax_filtered.set_title(
+        f"Filtered Data (n={n_filtered:,}, retained={n_filtered/n_total:.2%})"
+    )
+    ax_filtered.grid(True, alpha=0.3)
+    ax_filtered.legend(loc="best", fontsize=8)
+
+    # Match y-axis scales for direct comparison
+    y_max_overall = max(counts_unfiltered.max(), counts_filtered.max()) * 1.1
+    ax_unfiltered.set_ylim(0, y_max_overall)
+    ax_filtered.set_ylim(0, y_max_overall)
+
+    fig.tight_layout()
+
+    return fig
+
+
 def plot_quantile_elbow_overlay(
     result: InteriorResult | BoundaryResult,
     config: PlotConfig | None = None,
