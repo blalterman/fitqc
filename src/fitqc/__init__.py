@@ -54,9 +54,11 @@ from fitqc.interior import InteriorResult, compute_z, run_interior_qc
 from fitqc.plot import (
     plot_boundary_diagnostics,
     plot_bounds_filter_comparison,
+    plot_combined_filter_comparison,
     plot_ecdf_tolerance_overlays,
     plot_histogram_tolerance_overlays,
     plot_interior_diagnostics,
+    plot_interior_filter_comparison,
     plot_quantile_elbow_overlay,
     plot_quantile_spacing_overlays,
 )
@@ -102,9 +104,11 @@ __all__ = [
     # Plotting
     "plot_boundary_diagnostics",
     "plot_bounds_filter_comparison",
+    "plot_combined_filter_comparison",
     "plot_ecdf_tolerance_overlays",
     "plot_histogram_tolerance_overlays",
     "plot_interior_diagnostics",
+    "plot_interior_filter_comparison",
     "plot_quantile_elbow_overlay",
     "plot_quantile_spacing_overlays",
     "run_boundary_qc",
