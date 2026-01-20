@@ -375,9 +375,7 @@ def run_interior_qc(
             from fitqc._quantile_utils import _aggregate_elbows_median
 
             quantile_grid = np.array(config.quantile_grid)
-            _, elbows = _compute_quantile_curves_interior(
-                z_sorted, eps_grid, quantile_grid
-            )
+            _, elbows = _compute_quantile_curves_interior(z_sorted, eps_grid, quantile_grid)
 
             # Aggregate elbows via median for robust estimate
             eps_star = _aggregate_elbows_median(elbows, config.min_quantile_agreement)

@@ -5,7 +5,6 @@ InteriorConfig, BoundaryConfig, and PlotConfig dataclasses for multi-curve
 threshold estimation.
 """
 
-
 from fitqc.config import BoundaryConfig, InteriorConfig, PlotConfig
 
 # =============================================================================
@@ -273,8 +272,8 @@ class TestPlotConfigQuantile:
         assert len(config.figsize_tolerance) == 2
 
         width, height = config.figsize_tolerance
-        assert isinstance(width, (int, float))
-        assert isinstance(height, (int, float))
+        assert isinstance(width, int | float)
+        assert isinstance(height, int | float)
         assert width > 0
         assert height > 0
 
