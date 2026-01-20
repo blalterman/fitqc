@@ -79,6 +79,7 @@ Multi-curve detection with progressive grid:
 """
 
 from dataclasses import dataclass
+import logging
 
 import numpy as np
 from numpy.typing import NDArray
@@ -87,6 +88,8 @@ from fitqc._quantile_utils import _aggregate_elbows_median
 from fitqc.config import BoundaryConfig
 from fitqc.selection import select_elbow
 from fitqc.sortedops import tail_mass
+
+logger = logging.getLogger(__name__)
 
 
 def _build_tolerance_grid(config: BoundaryConfig) -> NDArray[np.floating]:
@@ -436,6 +439,46 @@ def run_boundary_qc(
 
     # Transform to normalized coordinates
     u = compute_u(x, L, U)
+
+    # Validate that samples are within parameter bounds
+    # Samples outside [L, U] create u < 0 or u > 1, which violate algorithm assumptions
+    n_total = len(u)
+    out_of_bounds_mask = (u < 0) | (u > 1)
+    n_out_of_bounds = np.sum(out_of_bounds_mask)
+
+    if n_out_of_bounds > 0:
+        frac_out_of_bounds = n_out_of_bounds / n_total
+        n_below = np.sum(u < 0)
+        n_above = np.sum(u > 1)
+
+        logger.warning(
+            f"Boundary QC: {n_out_of_bounds} samples ({frac_out_of_bounds:.2%}) "
+            f"are outside parameter bounds [L={L}, U={U}]. "
+            f"Below L: {n_below} ({n_below/n_total:.2%}), "
+            f"Above U: {n_above} ({n_above/n_total:.2%}). "
+            f"These samples will be excluded from boundary stickiness analysis. "
+            f"Note: Samples outside bounds may indicate fit failures or data quality issues."
+        )
+
+        # Filter to only valid samples
+        u = u[~out_of_bounds_mask]
+
+        # If all samples are out of bounds, return no detection
+        if len(u) == 0:
+            logger.error(
+                "Boundary QC: All samples are outside parameter bounds. "
+                "Cannot perform boundary stickiness analysis."
+            )
+            return BoundaryResult(
+                lower_pileup_detected=False,
+                upper_pileup_detected=False,
+                t_lo_star=None,
+                t_hi_star=None,
+                tol_grid=np.array([]),
+                lower_mass_curve=np.array([]),
+                upper_mass_curve=np.array([]),
+                quantile_elbows=None,
+            )
 
     # Build tolerance grid based on grid_mode
     tol_grid = _build_tolerance_grid(config)

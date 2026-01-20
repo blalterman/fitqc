@@ -761,6 +761,484 @@ def plot_histogram_tolerance_overlays(
     return fig
 
 
+def plot_bounds_filter_comparison(
+    x: np.ndarray,
+    L: float,
+    U: float,
+    bins: int | str = "auto",
+    config: PlotConfig | None = None,
+) -> Figure:
+    """Plot comparison of data before and after bounds filtering.
+
+    Creates high-resolution histograms showing:
+    - Original data (including out-of-bounds samples)
+    - Filtered data (only samples within [L, U])
+
+    Both histograms use the same binning for direct comparison. This
+    visualizes the effectiveness of the bounds validation filter.
+
+    Args:
+        x: Array of parameter values (unfiltered).
+        L: Lower bound of the parameter.
+        U: Upper bound of the parameter.
+        bins: Number of bins or binning strategy ('auto', 'fd', 'sturges', etc.).
+            Default is 'auto' which uses numpy's histogram bin selection.
+        config: PlotConfig for styling. Uses defaults if None.
+
+    Returns:
+        Figure with two subplots showing unfiltered and filtered distributions.
+
+    Examples:
+        >>> from fitqc.plot import plot_bounds_filter_comparison
+        >>> import numpy as np
+        >>> # Data with some out-of-bounds samples
+        >>> x = np.concatenate([
+        ...     np.zeros(100),  # Failed fits at 0
+        ...     np.random.uniform(0.01, 100, 9900)  # Valid data
+        ... ])
+        >>> fig = plot_bounds_filter_comparison(x, L=0.01, U=100.0, bins=200)
+        >>> fig.savefig("bounds_filter_comparison.png")
+    """
+    # Validate inputs
+    if L >= U:
+        raise ValueError(f"L must be less than U, got L={L}, U={U}")
+
+    # Handle defaults
+    if config is None:
+        config = PlotConfig()
+
+    # Filter non-finite values
+    x = x[np.isfinite(x)]
+
+    # Create filtered version
+    x_filtered = x[(x >= L) & (x <= U)]
+
+    # Count out-of-bounds samples
+    n_total = len(x)
+    n_below = np.sum(x < L)
+    n_above = np.sum(x > U)
+    n_out_of_bounds = n_below + n_above
+    n_filtered = len(x_filtered)
+
+    # Create figure with two subplots (vertical layout for easier comparison)
+    fig, axes = plt.subplots(2, 1, figsize=(10, 8), dpi=config.dpi)
+
+    # Determine bin edges from full data range for consistent binning
+    # Extend slightly beyond [L, U] to capture out-of-bounds samples
+    x_min = min(x.min(), L)
+    x_max = max(x.max(), U)
+
+    # Create bins
+    if isinstance(bins, str):
+        # Use numpy's histogram to determine bin edges
+        _, bin_edges = np.histogram(x, bins=bins, range=(x_min, x_max))
+    else:
+        bin_edges = np.linspace(x_min, x_max, bins + 1)
+
+    # Top subplot: Original (unfiltered) data
+    ax_unfiltered = axes[0]
+    counts_unfiltered, _, patches_unfiltered = ax_unfiltered.hist(
+        x,
+        bins=bin_edges,
+        histtype="stepfilled",
+        alpha=0.7,
+        color="steelblue",
+        edgecolor="black",
+        linewidth=0.5,
+    )
+
+    # Add vertical lines at bounds
+    ax_unfiltered.axvline(L, color="red", linestyle="--", linewidth=1.5, label=f"L={L}", alpha=0.7)
+    ax_unfiltered.axvline(U, color="red", linestyle="--", linewidth=1.5, label=f"U={U}", alpha=0.7)
+
+    # Add shading for out-of-bounds regions
+    y_max = counts_unfiltered.max() * 1.1
+    if n_below > 0:
+        ax_unfiltered.axvspan(x_min, L, alpha=0.2, color="red", label=f"Out-of-bounds (below L): {n_below}")
+    if n_above > 0:
+        ax_unfiltered.axvspan(U, x_max, alpha=0.2, color="red", label=f"Out-of-bounds (above U): {n_above}")
+
+    ax_unfiltered.set_xlabel("Parameter value")
+    ax_unfiltered.set_ylabel("Count")
+    ax_unfiltered.set_title(
+        f"Original Data (n={n_total:,}, out-of-bounds={n_out_of_bounds:,} [{n_out_of_bounds/n_total:.2%}])"
+    )
+    ax_unfiltered.grid(True, alpha=0.3)
+    ax_unfiltered.legend(loc="best", fontsize=8)
+
+    # Bottom subplot: Filtered data
+    ax_filtered = axes[1]
+    counts_filtered, _, patches_filtered = ax_filtered.hist(
+        x_filtered,
+        bins=bin_edges,
+        histtype="stepfilled",
+        alpha=0.7,
+        color="mediumseagreen",
+        edgecolor="black",
+        linewidth=0.5,
+    )
+
+    # Add vertical lines at bounds
+    ax_filtered.axvline(L, color="green", linestyle="--", linewidth=1.5, label=f"L={L}", alpha=0.7)
+    ax_filtered.axvline(U, color="green", linestyle="--", linewidth=1.5, label=f"U={U}", alpha=0.7)
+
+    ax_filtered.set_xlabel("Parameter value")
+    ax_filtered.set_ylabel("Count")
+    ax_filtered.set_title(
+        f"Filtered Data (n={n_filtered:,}, retained={n_filtered/n_total:.2%})"
+    )
+    ax_filtered.grid(True, alpha=0.3)
+    ax_filtered.legend(loc="best", fontsize=8)
+
+    # Match y-axis scales for direct comparison
+    y_max_overall = max(counts_unfiltered.max(), counts_filtered.max()) * 1.1
+    ax_unfiltered.set_ylim(0, y_max_overall)
+    ax_filtered.set_ylim(0, y_max_overall)
+
+    fig.tight_layout()
+
+    return fig
+
+
+def plot_interior_filter_comparison(
+    x: np.ndarray,
+    x0: float,
+    L: float,
+    U: float,
+    interior_result: InteriorResult,
+    bins: int | str = "auto",
+    config: PlotConfig | None = None,
+) -> Figure:
+    """Plot comparison of data before and after interior (x0) stickiness filtering.
+
+    Creates high-resolution histograms showing:
+    - Original data (including x0-stuck samples)
+    - Filtered data (only samples not stuck at x0)
+
+    Both histograms use the same binning for direct comparison. This
+    visualizes the effectiveness of the interior QC filter.
+
+    Args:
+        x: Array of parameter values (unfiltered).
+        x0: Initial guess value for the parameter.
+        L: Lower bound of the parameter.
+        U: Upper bound of the parameter.
+        interior_result: Result from run_interior_qc containing detection info.
+        bins: Number of bins or binning strategy ('auto', 'fd', 'sturges', etc.).
+        config: PlotConfig for styling. Uses defaults if None.
+
+    Returns:
+        Figure with two subplots showing unfiltered and filtered distributions.
+
+    Examples:
+        >>> from fitqc import run_interior_qc, plot_interior_filter_comparison
+        >>> # Run interior QC
+        >>> result = run_interior_qc(x, x0=1.0, L=0.0, U=10.0)
+        >>> # Visualize filtering impact
+        >>> fig = plot_interior_filter_comparison(x, 1.0, 0.0, 10.0, result)
+        >>> fig.savefig("interior_filter.png")
+    """
+    # Validate inputs
+    if L >= U:
+        raise ValueError(f"L must be less than U, got L={L}, U={U}")
+
+    # Handle defaults
+    if config is None:
+        config = PlotConfig()
+
+    # Filter non-finite values
+    x = x[np.isfinite(x)]
+
+    # Create filtered version based on interior result
+    if interior_result.spike_detected and interior_result.eps_star is not None:
+        # Filter out samples within eps_star of x0
+        z = np.abs(x - x0) / (U - L)
+        x_filtered = x[z > interior_result.eps_star]
+    else:
+        # No detection, all samples pass
+        x_filtered = x.copy()
+
+    # Count stuck samples
+    n_total = len(x)
+    n_stuck = n_total - len(x_filtered)
+    n_filtered = len(x_filtered)
+
+    # Create figure with two subplots (vertical layout)
+    fig, axes = plt.subplots(2, 1, figsize=(10, 8), dpi=config.dpi)
+
+    # Determine bin edges
+    if isinstance(bins, str):
+        _, bin_edges = np.histogram(x, bins=bins, range=(L, U))
+    else:
+        bin_edges = np.linspace(L, U, bins + 1)
+
+    # Top subplot: Original (unfiltered) data
+    ax_unfiltered = axes[0]
+    counts_unfiltered, _, _ = ax_unfiltered.hist(
+        x,
+        bins=bin_edges,
+        histtype="stepfilled",
+        alpha=0.7,
+        color="steelblue",
+        edgecolor="black",
+        linewidth=0.5,
+    )
+
+    # Add vertical line at x0
+    ax_unfiltered.axvline(x0, color="red", linestyle="--", linewidth=2, label=f"x0={x0}", alpha=0.8)
+
+    # Shade region around x0 if spike detected
+    if interior_result.spike_detected and interior_result.eps_star is not None:
+        eps_star = interior_result.eps_star
+        x0_width = eps_star * (U - L)
+        ax_unfiltered.axvspan(
+            x0 - x0_width, x0 + x0_width,
+            alpha=0.2, color="red",
+            label=f"Stuck region (ε*={eps_star:.4f}): {n_stuck} samples"
+        )
+
+    ax_unfiltered.set_xlabel("Parameter value")
+    ax_unfiltered.set_ylabel("Count")
+    title_str = f"Original Data (n={n_total:,}"
+    if interior_result.spike_detected:
+        title_str += f", stuck={n_stuck:,} [{n_stuck/n_total:.2%}])"
+    else:
+        title_str += ", no x0 stickiness detected)"
+    ax_unfiltered.set_title(title_str)
+    ax_unfiltered.grid(True, alpha=0.3)
+    ax_unfiltered.legend(loc="best", fontsize=8)
+
+    # Bottom subplot: Filtered data
+    ax_filtered = axes[1]
+    counts_filtered, _, _ = ax_filtered.hist(
+        x_filtered,
+        bins=bin_edges,
+        histtype="stepfilled",
+        alpha=0.7,
+        color="mediumseagreen",
+        edgecolor="black",
+        linewidth=0.5,
+    )
+
+    # Add vertical line at x0
+    ax_filtered.axvline(x0, color="green", linestyle="--", linewidth=2, label=f"x0={x0}", alpha=0.8)
+
+    ax_filtered.set_xlabel("Parameter value")
+    ax_filtered.set_ylabel("Count")
+    ax_filtered.set_title(
+        f"Filtered Data (n={n_filtered:,}, retained={n_filtered/n_total:.2%})"
+    )
+    ax_filtered.grid(True, alpha=0.3)
+    ax_filtered.legend(loc="best", fontsize=8)
+
+    # Match y-axis scales for direct comparison
+    y_max_overall = max(counts_unfiltered.max(), counts_filtered.max()) * 1.1
+    ax_unfiltered.set_ylim(0, y_max_overall)
+    ax_filtered.set_ylim(0, y_max_overall)
+
+    fig.tight_layout()
+
+    return fig
+
+
+def plot_combined_filter_comparison(
+    x: np.ndarray,
+    x0: float | None,
+    L: float,
+    U: float,
+    interior_result: InteriorResult | None,
+    boundary_result: BoundaryResult,
+    bins: int | str = "auto",
+    config: PlotConfig | None = None,
+) -> Figure:
+    """Plot combined interior and boundary filtering impact.
+
+    Creates high-resolution histograms showing progressive filtering:
+    1. Original data
+    2. After boundary filtering only
+    3. After interior filtering only (if applicable)
+    4. After both filters combined
+
+    All histograms use the same binning for direct comparison. This
+    visualizes the full QC pipeline effectiveness.
+
+    Args:
+        x: Array of parameter values (unfiltered).
+        x0: Initial guess value (None for moment-based parameters).
+        L: Lower bound of the parameter.
+        U: Upper bound of the parameter.
+        interior_result: Result from run_interior_qc (None if no x0).
+        boundary_result: Result from run_boundary_qc.
+        bins: Number of bins or binning strategy.
+        config: PlotConfig for styling. Uses defaults if None.
+
+    Returns:
+        Figure with 2x2 grid showing filtering stages.
+
+    Examples:
+        >>> from fitqc import run_qc
+        >>> report, masks = run_qc(params, spec)
+        >>> fig = plot_combined_filter_comparison(
+        ...     x, x0=1.0, L=0.0, U=10.0,
+        ...     report.interior_results['alpha'],
+        ...     report.boundary_results['alpha']
+        ... )
+    """
+    # Validate inputs
+    if L >= U:
+        raise ValueError(f"L must be less than U, got L={L}, U={U}")
+
+    # Handle defaults
+    if config is None:
+        config = PlotConfig()
+
+    # Filter non-finite values
+    x = x[np.isfinite(x)]
+    n_total = len(x)
+
+    # Apply boundary filter
+    u = (x - L) / (U - L)
+    boundary_mask = (u >= 0) & (u <= 1)
+    x_boundary_only = x[boundary_mask]
+
+    # Apply interior filter (if applicable)
+    if interior_result is not None and x0 is not None:
+        if interior_result.spike_detected and interior_result.eps_star is not None:
+            z = np.abs(x - x0) / (U - L)
+            interior_mask = z > interior_result.eps_star
+            x_interior_only = x[interior_mask]
+        else:
+            interior_mask = np.ones(len(x), dtype=bool)
+            x_interior_only = x.copy()
+    else:
+        interior_mask = np.ones(len(x), dtype=bool)
+        x_interior_only = x.copy()
+
+    # Apply both filters
+    combined_mask = boundary_mask & interior_mask
+    x_combined = x[combined_mask]
+
+    # Count samples at each stage
+    n_boundary = len(x_boundary_only)
+    n_interior = len(x_interior_only)
+    n_combined = len(x_combined)
+
+    # Create figure with 2x2 grid
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10), dpi=config.dpi)
+
+    # Determine bin edges
+    if isinstance(bins, str):
+        _, bin_edges = np.histogram(x, bins=bins, range=(L, U))
+    else:
+        bin_edges = np.linspace(L, U, bins + 1)
+
+    # Top-left: Original data
+    ax_original = axes[0, 0]
+    counts_original, _, _ = ax_original.hist(
+        x,
+        bins=bin_edges,
+        histtype="stepfilled",
+        alpha=0.7,
+        color="steelblue",
+        edgecolor="black",
+        linewidth=0.5,
+    )
+    ax_original.axvline(L, color="red", linestyle="--", linewidth=1, alpha=0.5)
+    ax_original.axvline(U, color="red", linestyle="--", linewidth=1, alpha=0.5)
+    if x0 is not None:
+        ax_original.axvline(x0, color="orange", linestyle="--", linewidth=1.5, alpha=0.7)
+    ax_original.set_xlabel("Parameter value")
+    ax_original.set_ylabel("Count")
+    ax_original.set_title(f"1. Original Data (n={n_total:,})")
+    ax_original.grid(True, alpha=0.3)
+
+    # Top-right: Boundary filtered only
+    ax_boundary = axes[0, 1]
+    counts_boundary, _, _ = ax_boundary.hist(
+        x_boundary_only,
+        bins=bin_edges,
+        histtype="stepfilled",
+        alpha=0.7,
+        color="coral",
+        edgecolor="black",
+        linewidth=0.5,
+    )
+    ax_boundary.axvline(L, color="green", linestyle="--", linewidth=1, alpha=0.5)
+    ax_boundary.axvline(U, color="green", linestyle="--", linewidth=1, alpha=0.5)
+    if x0 is not None:
+        ax_boundary.axvline(x0, color="orange", linestyle="--", linewidth=1.5, alpha=0.7)
+    ax_boundary.set_xlabel("Parameter value")
+    ax_boundary.set_ylabel("Count")
+    removed_boundary = n_total - n_boundary
+    ax_boundary.set_title(
+        f"2. Boundary Filter Only (n={n_boundary:,}, removed={removed_boundary:,} [{removed_boundary/n_total:.2%}])"
+    )
+    ax_boundary.grid(True, alpha=0.3)
+
+    # Bottom-left: Interior filtered only
+    ax_interior = axes[1, 0]
+    counts_interior, _, _ = ax_interior.hist(
+        x_interior_only,
+        bins=bin_edges,
+        histtype="stepfilled",
+        alpha=0.7,
+        color="plum",
+        edgecolor="black",
+        linewidth=0.5,
+    )
+    ax_interior.axvline(L, color="red", linestyle="--", linewidth=1, alpha=0.5)
+    ax_interior.axvline(U, color="red", linestyle="--", linewidth=1, alpha=0.5)
+    if x0 is not None:
+        ax_interior.axvline(x0, color="green", linestyle="--", linewidth=1.5, alpha=0.7)
+    ax_interior.set_xlabel("Parameter value")
+    ax_interior.set_ylabel("Count")
+    removed_interior = n_total - n_interior
+    title_str = f"3. Interior Filter Only"
+    if interior_result is not None and interior_result.spike_detected:
+        title_str += f" (n={n_interior:,}, removed={removed_interior:,} [{removed_interior/n_total:.2%}])"
+    else:
+        title_str += f" (n={n_interior:,}, no x0 stickiness)"
+    ax_interior.set_title(title_str)
+    ax_interior.grid(True, alpha=0.3)
+
+    # Bottom-right: Combined filtering
+    ax_combined = axes[1, 1]
+    counts_combined, _, _ = ax_combined.hist(
+        x_combined,
+        bins=bin_edges,
+        histtype="stepfilled",
+        alpha=0.7,
+        color="mediumseagreen",
+        edgecolor="black",
+        linewidth=0.5,
+    )
+    ax_combined.axvline(L, color="green", linestyle="--", linewidth=1, alpha=0.5)
+    ax_combined.axvline(U, color="green", linestyle="--", linewidth=1, alpha=0.5)
+    if x0 is not None:
+        ax_combined.axvline(x0, color="green", linestyle="--", linewidth=1.5, alpha=0.7)
+    ax_combined.set_xlabel("Parameter value")
+    ax_combined.set_ylabel("Count")
+    removed_combined = n_total - n_combined
+    ax_combined.set_title(
+        f"4. Combined Filters (n={n_combined:,}, removed={removed_combined:,} [{removed_combined/n_total:.2%}])"
+    )
+    ax_combined.grid(True, alpha=0.3)
+
+    # Match y-axis scales for direct comparison
+    y_max_overall = max(
+        counts_original.max(),
+        counts_boundary.max(),
+        counts_interior.max(),
+        counts_combined.max()
+    ) * 1.1
+    for ax in axes.flat:
+        ax.set_ylim(0, y_max_overall)
+
+    fig.tight_layout()
+
+    return fig
+
+
 def plot_quantile_elbow_overlay(
     result: InteriorResult | BoundaryResult,
     config: PlotConfig | None = None,
