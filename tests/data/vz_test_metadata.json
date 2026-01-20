@@ -1,0 +1,21 @@
+{
+  "name": "vz",
+  "x0": null,
+  "L": -200.0,
+  "U": 200.0,
+  "units": "km/s",
+  "n_samples": 100000,
+  "n_samples_full": 7549989,
+  "sample_seed": 42,
+  "sample_method": "uniform random without replacement",
+  "source": "/Users/balterma/observatories/wind/pipeline/swe/swefc.h5:ppa12_apeq",
+  "fitqc_test": {
+    "x0": null,
+    "L": -200.0,
+    "U": 200.0,
+    "expected_lower_stickiness": false,
+    "expected_upper_stickiness": false,
+    "expected_interior_stickiness": false
+  },
+  "notes": "Moment-based x0. Velocity component perpendicular to ecliptic."
+}

@@ -1,5 +1,5 @@
 {
-  "name": "e_dv_pp",
+  "name": "e_w_p1",
   "x0": 0.0,
   "L": -75.0,
   "U": 75.0,
@@ -14,8 +14,8 @@
     "L": -75.0,
     "U": 75.0,
     "expected_lower_stickiness": true,
-    "expected_upper_stickiness": true,
+    "expected_upper_stickiness": false,
     "expected_interior_stickiness": true
   },
-  "notes": "Proton-proton drift velocity perturbation. CRITICAL: Shows more than single bin width stickiness at initial guess (x0=0). The spike at x0 spans multiple bins, requiring detection methods that account for wider-than-expected pileup patterns."
+  "notes": "Core anisotropy coefficient."
 }

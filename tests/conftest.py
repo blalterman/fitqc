@@ -173,7 +173,7 @@ def e_dv_ap_test_case() -> dict:
 
 @pytest.fixture
 def np1_test_case() -> dict:
-    """Test case for np1 parameter.
+    """Test case for np1 parameter (1M sample for adequate boundary coverage).
 
     Distribution characteristics:
         - ~0% at lower boundary (L=0.01)
@@ -185,3 +185,168 @@ def np1_test_case() -> dict:
     """
     data_dir = Path(__file__).parent / "data"
     return _load_test_case(data_dir, "np1")
+
+
+# =============================================================================
+# Velocity components (moment-based x0)
+# =============================================================================
+
+
+@pytest.fixture
+def vx_test_case() -> dict:
+    """Test case for vx (x-velocity toward Sun).
+
+    Distribution characteristics:
+        - ~0.007% at lower boundary (L=-1200)
+        - ~0.30% at upper boundary (U=-200)
+        - Moment-based x0 (varies per sample)
+
+    Negative control for boundary stickiness.
+    """
+    data_dir = Path(__file__).parent / "data"
+    return _load_test_case(data_dir, "vx")
+
+
+@pytest.fixture
+def vy_test_case() -> dict:
+    """Test case for vy (y-velocity).
+
+    Distribution characteristics:
+        - ~0.014% at lower boundary (L=-200)
+        - ~0.042% at upper boundary (U=200)
+        - Moment-based x0 (varies per sample)
+
+    CRITICAL NOTE: Small shoulders observed around 0 in tolerance histograms.
+    These may be initial guesses or moment analysis artifacts. Testing whether
+    our methods can detect these subtle spikes. May require interior detection
+    methods beyond tolerance histograms.
+    """
+    data_dir = Path(__file__).parent / "data"
+    return _load_test_case(data_dir, "vy")
+
+
+@pytest.fixture
+def vz_test_case() -> dict:
+    """Test case for vz (z-velocity perpendicular to ecliptic).
+
+    Distribution characteristics:
+        - ~0.048% at lower boundary (L=-200)
+        - ~0.034% at upper boundary (U=200)
+        - Moment-based x0 (varies per sample)
+
+    Negative control for boundary stickiness.
+    """
+    data_dir = Path(__file__).parent / "data"
+    return _load_test_case(data_dir, "vz")
+
+
+# =============================================================================
+# Thermal speed parameters
+# =============================================================================
+
+
+@pytest.fixture
+def w_const_test_case() -> dict:
+    """Test case for w_const (thermal speed).
+
+    Distribution characteristics:
+        - ~0.032% at lower boundary (L=5.0)
+        - ~0.73% at upper boundary (U=150.0) - UPPER STICKINESS
+        - Moment-based x0 (varies per sample)
+
+    Single-sided upper boundary stickiness test case.
+    """
+    data_dir = Path(__file__).parent / "data"
+    return _load_test_case(data_dir, "w_const")
+
+
+@pytest.fixture
+def e_w_p2_test_case() -> dict:
+    """Test case for e_w_p2 (beam thermal speed perturbation).
+
+    Distribution characteristics:
+        - ~0.45% at lower boundary (L=-75)
+        - ~35% at upper boundary (U=75) - EXTREME UPPER STICKINESS
+        - ~1.6% at x0=0
+
+    Extreme upper boundary stickiness (~35%) with interior stickiness at x0.
+    """
+    data_dir = Path(__file__).parent / "data"
+    return _load_test_case(data_dir, "e_w_p2")
+
+
+@pytest.fixture
+def e_w_p1_test_case() -> dict:
+    """Test case for e_w_p1 (core anisotropy coefficient).
+
+    Distribution characteristics:
+        - ~1.24% at lower boundary (L=-75) - LOWER STICKINESS
+        - ~0.38% at upper boundary (U=75)
+        - ~1.6% at x0=0
+
+    Single-sided lower boundary stickiness with interior stickiness at x0.
+    """
+    data_dir = Path(__file__).parent / "data"
+    return _load_test_case(data_dir, "e_w_p1")
+
+
+@pytest.fixture
+def e_w_a_test_case() -> dict:
+    """Test case for e_w_a (alpha thermal speed perturbation).
+
+    Distribution characteristics:
+        - ~0.72% at lower boundary (L=-60) - LOWER STICKINESS
+        - ~9.7% at upper boundary (U=200) - UPPER STICKINESS
+        - ~1.6% at x0=0
+
+    CRITICAL NOTE: Multiple initial guess options exist. Different versions
+    of the initial guess are used in the fitting algorithm. The documented
+    x0=0 shows up at transformed variable < 0, requiring careful analysis
+    of interior stickiness patterns.
+
+    Bilateral boundary stickiness with complex interior behavior.
+    """
+    data_dir = Path(__file__).parent / "data"
+    return _load_test_case(data_dir, "e_w_a")
+
+
+# =============================================================================
+# Density parameters
+# =============================================================================
+
+
+@pytest.fixture
+def np2_test_case() -> dict:
+    """Test case for np2 (beam density).
+
+    Distribution characteristics:
+        - ~0% at lower boundary (L=0.01)
+        - ~0.005% at upper boundary (U=100)
+        - ~1.5% at x0=0 - INTERIOR STICKINESS
+
+    Interior stickiness only (no boundary stickiness).
+    Initial guess is 10% of core density, introduced at Level 3.
+    """
+    data_dir = Path(__file__).parent / "data"
+    return _load_test_case(data_dir, "np2")
+
+
+# =============================================================================
+# Convenience fixture for all test cases
+# =============================================================================
+
+
+@pytest.fixture
+def all_ppa12_test_cases() -> dict:
+    """Load all PPA12 test cases as a dictionary.
+
+    Returns:
+        Dictionary mapping parameter name to test case dict.
+    """
+    data_dir = Path(__file__).parent / "data"
+    params = [
+        "A_He", "e_dv_ap", "e_dv_pp", "np1", "np2",
+        "vx", "vy", "vz", "w_const",
+        "e_w_p1", "e_w_p2", "e_w_a",
+    ]
+    return {name: _load_test_case(data_dir, name) for name in params}

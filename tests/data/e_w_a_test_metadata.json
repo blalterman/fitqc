@@ -1,8 +1,8 @@
 {
-  "name": "e_dv_pp",
+  "name": "e_w_a",
   "x0": 0.0,
-  "L": -75.0,
-  "U": 75.0,
+  "L": -60.0,
+  "U": 200.0,
   "units": "%",
   "n_samples": 100000,
   "n_samples_full": 7549989,
@@ -11,11 +11,11 @@
   "source": "/Users/balterma/observatories/wind/pipeline/swe/swefc.h5:ppa12_apeq",
   "fitqc_test": {
     "x0": 0.0,
-    "L": -75.0,
-    "U": 75.0,
+    "L": -60.0,
+    "U": 200.0,
     "expected_lower_stickiness": true,
     "expected_upper_stickiness": true,
     "expected_interior_stickiness": true
   },
-  "notes": "Proton-proton drift velocity perturbation. CRITICAL: Shows more than single bin width stickiness at initial guess (x0=0). The spike at x0 spans multiple bins, requiring detection methods that account for wider-than-expected pileup patterns."
+  "notes": "Alpha thermal speed perturbation. CRITICAL: Multiple initial guess options exist - there are different versions of the initial guess used. The documented x0=0 shows up at transformed variable < 0. Requires careful analysis of interior stickiness."
 }
