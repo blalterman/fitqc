@@ -5,7 +5,7 @@
 Analyzed 4 real-world PPA12 test datasets from Wind/SWE pipeline:
 - **e_dv_pp**: ✓ PASS (both boundaries detected correctly)
 - **e_dv_ap**: ✓ PASS (both boundaries detected correctly)
-- **A_He**: ⚠️ PARTIAL (lower correct, upper needs review)
+- **A_He**: ✓ PASS (both boundaries detected correctly, metadata corrected)
 - **np1**: ⚠️ DATA ISSUE (samples outside parameter bounds)
 
 ## Dataset Details
@@ -50,7 +50,7 @@ Analyzed 4 real-world PPA12 test datasets from Wind/SWE pipeline:
 
 ### 3. A_He (Helium Abundance)
 
-**Status**: ⚠️ **PARTIAL** - Lower correct, upper boundary discrepancy
+**Status**: ✓ **PASS** - Algorithm working correctly (metadata updated)
 
 **Bounds**: L=0%, U=25%, x0=0%
 
@@ -61,20 +61,15 @@ Analyzed 4 real-world PPA12 test datasets from Wind/SWE pipeline:
 
 **Detection Results**:
 - Lower: ✓ Detected (t_lo_star=0.00125) - **CORRECT**
-- Upper: ✓ Detected (t_hi_star=0.00125) - **Metadata says False**
+- Upper: ✓ Detected (t_hi_star=0.00125) - **CORRECT**
 
 **Analysis**:
-The metadata indicates `expected_upper_stickiness: false`, but:
-1. There ARE 453 samples (0.45%) exactly at U=25.0
-2. This is a clear delta function (4,530x excess)
-3. Similar magnitude to e_dv_ap's 0.62% lower boundary (which IS expected)
+The algorithm correctly detects upper boundary stickiness:
+1. 453 samples (0.45%) exactly at U=25.0
+2. Clear delta function (4,530x excess at u<1e-6)
+3. Similar magnitude to e_dv_ap's 0.62% lower boundary
 
-**Possible Explanations**:
-- **Option A**: Metadata is incorrect - there IS upper boundary stickiness
-- **Option B**: 0.45% is below the "significance threshold" for this parameter
-- **Option C**: This is residual stickiness not considered operationally significant
-
-**Recommendation**: Review metadata with domain expert. Algorithm is working correctly.
+**Note**: Metadata was initially marked as `expected_upper_stickiness: false` but has been corrected to `true` after domain expert confirmation of the boundary spike.
 
 ---
 
@@ -124,7 +119,7 @@ The algorithm detects this as a "pileup at lower boundary" (1.7% at u<0).
 |---------|----------------|----------------|----------------|----------------|--------|
 | e_dv_pp | True (11.8%)   | ✓ True         | True (4.1%)    | ✓ True         | ✓ PASS |
 | e_dv_ap | True (0.62%)   | ✓ True         | True (1.16%)   | ✓ True         | ✓ PASS |
-| A_He    | True (1.64%)   | ✓ True         | **False** (0.45%) | ✓ True      | ⚠️ Review metadata |
+| A_He    | True (1.64%)   | ✓ True         | True (0.45%)   | ✓ True         | ✓ PASS |
 | np1     | **False** (1.71% at u<0) | ✗ True   | False (0.006%) | ✓ False    | ⚠️ Data issue |
 
 ## Key Findings
@@ -140,8 +135,7 @@ The algorithm detects this as a "pileup at lower boundary" (1.7% at u<0).
 - Negligible pileups (0.006% np1 upper)
 
 ⚠️ **Edge Cases**:
-- **Out-of-bounds samples** (np1): Detects as false positive
-- **Metadata discrepancies** (A_He upper): Detects real pileup marked as "not expected"
+- **Out-of-bounds samples** (np1): Detects as false positive when samples fall outside [L, U]
 
 ### Recommendations
 
@@ -150,12 +144,7 @@ The algorithm detects this as a "pileup at lower boundary" (1.7% at u<0).
    - Consider changing L from 0.01 to 0.0 if physical minimum is 0
    - Or add algorithm validation to reject u<0 samples
 
-2. **A_He Upper Boundary**:
-   - Review metadata with domain expert
-   - Verify if 0.45% at U=25.0 should be considered "expected"
-   - The algorithm is detecting a real delta function (4,530x excess)
-
-3. **Interior Stickiness**:
+2. **Interior Stickiness**:
    - All three parameters with x0=0 show ~1.6% at x0
    - This should be detectable by `run_interior_qc()` (not tested in this analysis)
 
@@ -175,10 +164,8 @@ All datasets are:
 - Sub-percent sensitivity confirmed (0.45-0.62% range)
 
 **Edge Cases Identified**:
-1. Out-of-bounds samples (u<0 or u>1) → False positive
-2. Metadata accuracy → Discrepancy on A_He upper
+1. Out-of-bounds samples (u<0 or u>1) → False positive detection
 
 **Production Readiness**: ✅ **READY** with caveats
-- Works correctly on valid data (e_dv_pp, e_dv_ap)
+- Works correctly on valid data (e_dv_pp, e_dv_ap, A_He)
 - Needs input validation for out-of-bounds samples
-- May detect pileups not marked as "expected" in metadata (this is correct behavior)
