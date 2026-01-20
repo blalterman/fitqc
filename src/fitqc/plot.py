@@ -346,8 +346,7 @@ def plot_quantile_spacing_overlays(
         x_sorted: Pre-sorted array of values (must be sorted in ascending order).
         L: Lower bound for tolerance filtering (optional).
         U: Upper bound for tolerance filtering (optional).
-        tols: Tolerance values for filtering before computing quantiles.
-            If None, uses np.linspace(0, 0.05, n_tols).
+        tols: Tolerance values for filtering. If None, uses linspace(0, 0.05, n_tols).
         n_tols: Number of tolerances if tols is None.
         q_max: Maximum quantile to show (0.1 = first 10%).
         n_quantiles: Number of quantile points.
@@ -758,18 +757,19 @@ def plot_quantile_elbow_overlay(
     in quantile-based stickiness detection.
 
     For InteriorResult:
-        - X-axis: Quantile values (e.g., 0.001, 0.01, 0.05)
-        - Y-axis: Detected epsilon thresholds (log scale)
-        - Single panel showing quantile vs eps relationship
+
+    - X-axis: Quantile values (e.g., 0.001, 0.01, 0.05)
+    - Y-axis: Detected epsilon thresholds (log scale)
+    - Single panel showing quantile vs eps relationship
 
     For BoundaryResult:
-        - Two panels: one for lower boundary, one for upper boundary
-        - X-axis: Quantile values
-        - Y-axis: Detected tolerance thresholds
+
+    - Two panels: one for lower boundary, one for upper boundary
+    - X-axis: Quantile values
+    - Y-axis: Detected tolerance thresholds
 
     Args:
-        result: InteriorResult or BoundaryResult from QC analysis.
-            Must have quantile_elbows field (from use_quantile_analysis=True).
+        result: InteriorResult or BoundaryResult with quantile_elbows field.
         config: PlotConfig for styling. Uses defaults if None.
 
     Returns:

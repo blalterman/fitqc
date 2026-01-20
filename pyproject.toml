@@ -34,6 +34,9 @@ dev = [
     "pytest>=7.0",
     "ruff>=0.1",
     "pre-commit>=3.0",
+    "sphinx>=7.0",
+    "sphinx-rtd-theme>=2.0",
+    "sphinx-autodoc-typehints>=2.0",
 ]
 docs = [
     "sphinx>=7.0",
@@ -52,7 +55,7 @@ packages = ["src/fitqc"]
 target-version = "py311"
 line-length = 100
 src = ["src"]
-extend-exclude = ["docs"]
+extend-exclude = ["docs", "notebooks"]
 
 [tool.ruff.lint]
 select = [

@@ -164,23 +164,9 @@ def compute_z(x: NDArray[np.floating], x0: float, L: float, U: float) -> NDArray
 
 @dataclass
 class InteriorResult:
-    """Result of interior QC analysis.
+    """Result of interior QC analysis."""
 
-    Attributes:
-        spike_detected: Whether a spike at x0 was detected via histogram analysis.
-        spike_z_loc: Z-location of the spike (if detected). Should be near 0 for true stickiness.
-        eps_star: Optimal epsilon threshold from elbow detection (if detected).
-        eps_grid: Array of epsilon values tested in the mass curve analysis.
-        mass_curve: P(z < eps) for each eps in eps_grid.
-        hist_counts: Histogram counts of z-values.
-        hist_edges: Histogram bin edges for z-values.
-        quantile_elbows: Optional dict mapping quantile values to elbow thresholds.
-            Format: {0.01: 1e-6, 0.05: 1e-5, ...}
-            Only populated when use_quantile_analysis=True in config.
-            Useful for debugging multi-curve threshold estimation.
-    """
-
-    #: Whether a spike at x0 was detected.
+    #: Whether a spike at x0 was detected via histogram analysis.
     spike_detected: bool
     #: Z-location of the spike (if detected). Should be near 0 for true stickiness.
     spike_z_loc: float | None

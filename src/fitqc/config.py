@@ -65,6 +65,7 @@ class InteriorConfig:
     The Algorithm
     -------------
     **Single-Curve Mode (default):**
+
     1. Transform x → z = ``|x - x0| / max(x0 - L, U - x0)``, so z=0 at x0
     2. For each eps in logspace(eps_log10_min, eps_log10_max, n_eps):
        - Compute P(z < eps) = "fraction of samples within eps of x0"
@@ -77,6 +78,7 @@ class InteriorConfig:
     6. Use elbow detection on the P(z < eps) curve to find eps*
 
     **Multi-Curve Mode (use_quantile_analysis=True):**
+
     When analyzing multiple curves simultaneously (e.g., from different fits),
     the algorithm computes P(z < eps) for each quantile in quantile_grid.
     The optimal threshold eps* is then determined by finding the median elbow

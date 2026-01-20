@@ -283,29 +283,23 @@ def compute_u(x: np.ndarray, L: float, U: float) -> np.ndarray:
 
 @dataclass
 class BoundaryResult:
-    """Result of boundary QC analysis.
+    """Result of boundary QC analysis."""
 
-    Attributes:
-        lower_pileup_detected: Whether excess mass was detected near lower bound.
-        upper_pileup_detected: Whether excess mass was detected near upper bound.
-        t_lo_star: Optimal lower tolerance (elbow point), or None if no elbow.
-        t_hi_star: Optimal upper tolerance (elbow point), or None if no elbow.
-        tol_grid: Array of tolerance values tested.
-        lower_mass_curve: P(u < tol) for each tolerance.
-        upper_mass_curve: P(u > 1-tol) for each tolerance.
-        quantile_elbows: Optional dict mapping "lower" and "upper" to quantile→elbow dicts.
-            Format: {"lower": {0.01: 0.005, 0.05: 0.010, ...}, "upper": {...}}
-            Only populated when use_quantile_analysis=True in config.
-            Useful for debugging multi-curve threshold estimation.
-    """
-
+    #: Whether excess mass was detected near lower bound.
     lower_pileup_detected: bool
+    #: Whether excess mass was detected near upper bound.
     upper_pileup_detected: bool
+    #: Optimal lower tolerance (elbow point), or None if no elbow.
     t_lo_star: float | None
+    #: Optimal upper tolerance (elbow point), or None if no elbow.
     t_hi_star: float | None
+    #: Array of tolerance values tested.
     tol_grid: np.ndarray
+    #: P(u < tol) for each tolerance.
     lower_mass_curve: np.ndarray
+    #: P(u > 1-tol) for each tolerance.
     upper_mass_curve: np.ndarray
+    #: Quantile elbow data (only with use_quantile_analysis=True).
     quantile_elbows: dict[str, dict[float, float | None]] | None = None
 
 
