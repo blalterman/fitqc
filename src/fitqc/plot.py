@@ -351,8 +351,7 @@ def plot_quantile_spacing_overlays(
         n_tols: Number of tolerances if tols is None.
         q_max: Maximum quantile to show (0.1 = first 10%).
         n_quantiles: Number of quantile points.
-        use_alpha: If True, use alpha gradient (base=1.0, top=0.3).
-                   If False, all layers use alpha=1.0 (fully opaque).
+        use_alpha: If True, use alpha gradient (base=1.0, top=0.3). If False, all layers use alpha=1.0 (fully opaque).
         config: PlotConfig for styling. If None, uses PlotConfig().
 
     Returns:
@@ -504,8 +503,7 @@ def plot_ecdf_tolerance_overlays(
         tols: Array of tolerance values. If None, uses linspace(0, 0.05, n_tols).
         n_tols: Number of tolerances if tols is None.
         side: Which boundary to visualize ("lower", "upper", or "both").
-        use_alpha: If True, use alpha gradient (base=1.0, top=0.3).
-                   If False, all layers use alpha=1.0 (fully opaque).
+        use_alpha: If True, use alpha gradient (base=1.0, top=0.3). If False, all layers use alpha=1.0 (fully opaque).
         config: PlotConfig for styling.
 
     Returns:
@@ -660,8 +658,7 @@ def plot_histogram_tolerance_overlays(
         tols: Array of tolerance values to plot. If None, uses linspace(0, 0.05, n_tols).
         n_tols: Number of tolerances if tols is None.
         bins: Number of histogram bins.
-        use_alpha: If True, use alpha gradient (base=1.0, top=0.3).
-                   If False, all layers use alpha=1.0 (fully opaque).
+        use_alpha: If True, use alpha gradient (base=1.0, top=0.3). If False, all layers use alpha=1.0 (fully opaque).
         config: PlotConfig for styling. Uses defaults if None.
 
     Returns:
