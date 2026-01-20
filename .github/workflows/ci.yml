@@ -32,4 +32,6 @@ jobs:
         with:
           python-version: "3.13"
       - run: pip install -e ".[docs]"
+      - name: Download intersphinx inventories
+        run: python scripts/update_intersphinx.py
       - run: python -m sphinx -b html docs docs/_build/html -W --keep-going
