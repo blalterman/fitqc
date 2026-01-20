@@ -4,7 +4,7 @@
   "L": 0.01,
   "U": 100.0,
   "units": "/cc",
-  "n_samples": 100000,
+  "n_samples": 1000000,
   "n_samples_full": 7549989,
   "sample_seed": 42,
   "sample_method": "uniform random without replacement",
@@ -17,5 +17,5 @@
     "expected_upper_stickiness": false,
     "expected_interior_stickiness": false
   },
-  "notes": "Moment-based parameter - x0 varies per sample, so no interior stickiness test applicable"
+  "notes": "Moment-based parameter - x0 varies per sample. Larger sample (1M) to capture rare boundary values."
 }
