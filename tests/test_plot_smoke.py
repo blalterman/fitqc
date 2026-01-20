@@ -94,3 +94,63 @@ class TestPlotSmoke:
         plot_boundary_diagnostics(create_mock_boundary_result(), PlotConfig())
         assert len(show_called) == 0
         plt.close("all")
+
+    def test_kneedle_internals_runs_without_crash(self):
+        """Smoke test: plot_kneedle_internals executes without exceptions."""
+        from fitqc.plot import plot_kneedle_internals
+
+        x = np.linspace(0, 10, 50)
+        y = 1 - np.exp(-x)
+        fig = plot_kneedle_internals(x, y)
+
+        # Minimal check - just verify figure created
+        assert len(fig.axes) >= 3, "Should create at least 3 panels"
+        plt.close(fig)
+
+    def test_quantile_elbows_detailed_runs_without_crash(self):
+        """Smoke test: plot_quantile_elbows_detailed executes without exceptions."""
+        from fitqc.plot import plot_quantile_elbows_detailed
+
+        result = InteriorResult(
+            spike_detected=True,
+            spike_z_loc=0.02,
+            eps_star=1e-6,
+            eps_grid=np.logspace(-12, -3, 50),
+            mass_curve=np.linspace(0.01, 0.5, 50),
+            hist_counts=np.random.default_rng(42).integers(0, 100, 100).astype(float),
+            hist_edges=np.linspace(0, 1, 101),
+            quantile_elbows={0.01: 1e-7, 0.05: 5e-7},
+        )
+        fig = plot_quantile_elbows_detailed(result)
+
+        assert len(fig.axes) >= 1, "Should create at least 1 panel"
+        plt.close(fig)
+
+    def test_new_plots_do_not_call_show(self, monkeypatch):
+        """Test that new plot functions do NOT call plt.show()."""
+        from fitqc.plot import plot_kneedle_internals, plot_quantile_elbows_detailed
+
+        show_called = []
+        monkeypatch.setattr(plt, "show", lambda: show_called.append(True))
+
+        # Test plot_kneedle_internals
+        x = np.linspace(0, 10, 50)
+        y = 1 - np.exp(-x)
+        fig1 = plot_kneedle_internals(x, y)
+        plt.close(fig1)
+
+        # Test plot_quantile_elbows_detailed
+        result = InteriorResult(
+            spike_detected=True,
+            spike_z_loc=0.02,
+            eps_star=1e-6,
+            eps_grid=np.logspace(-12, -3, 50),
+            mass_curve=np.linspace(0.01, 0.5, 50),
+            hist_counts=np.random.default_rng(42).integers(0, 100, 100).astype(float),
+            hist_edges=np.linspace(0, 1, 101),
+            quantile_elbows={0.01: 1e-7},
+        )
+        fig2 = plot_quantile_elbows_detailed(result)
+        plt.close(fig2)
+
+        assert len(show_called) == 0, "plt.show() should not be called"

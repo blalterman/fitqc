@@ -1030,3 +1030,504 @@ def _plot_boundary_panel(
         t_star_idx = [i for i, label in enumerate(labels) if "t*" in label]
         if t_star_idx:
             ax.legend([handles[t_star_idx[0]]], [labels[t_star_idx[0]]], loc="best")
+
+
+def plot_kneedle_internals(
+    x: np.ndarray,
+    y: np.ndarray,
+    curve: str = "concave",
+    direction: str = "increasing",
+    log_x: bool = False,
+    config: PlotConfig | None = None,
+) -> Figure:
+    """Visualize Kneedle algorithm internal state for elbow detection.
+
+    Creates a 4-panel figure showing the internal steps of the Kneedle algorithm:
+    1. Original curve with detected elbow marked
+    2. Normalized curve (both x and y normalized to [0,1])
+    3. Difference curve showing curvature (where max indicates elbow)
+    4. Summary panel with annotations
+
+    This visualization helps diagnose elbow detection behavior and understand
+    why a particular point was chosen (or why no elbow was detected).
+
+    Args:
+        x: X-values (must be monotonic).
+        y: Y-values corresponding to x.
+        curve: Curve shape. Either "concave" or "convex".
+        direction: Data direction. Either "increasing" or "decreasing".
+        log_x: If True, algorithm works in log10(x) space internally but displays
+            in original space with log scale on x-axis.
+        config: PlotConfig for styling. If None, uses defaults.
+
+    Returns:
+        matplotlib Figure object with 4 panels showing algorithm internals.
+
+    Note:
+        Accesses KneeLocator private attributes (_y_normalized, _y_diff) defensively
+        using try/except. If these internals are unavailable, shows informative
+        message instead of crashing.
+
+    Example:
+        >>> import numpy as np
+        >>> from fitqc.plot import plot_kneedle_internals
+        >>> from fitqc.config import PlotConfig
+        >>>
+        >>> # Create sample data with elbow
+        >>> x = np.linspace(1, 100, 50)
+        >>> y = 1 / x + 0.1  # Hyperbolic decay
+        >>>
+        >>> fig = plot_kneedle_internals(x, y, log_x=True)
+        >>> fig.savefig("kneedle_internals.png")
+    """
+    # Handle config defaults
+    if config is None:
+        config = PlotConfig()
+
+    # Prepare x-axis (handle log_x)
+    if log_x:
+        x_work = np.log10(x)
+    else:
+        x_work = x
+
+    # Run KneeLocator to get elbow and internals
+    from kneed import KneeLocator
+
+    kl = KneeLocator(
+        x_work,
+        y,
+        curve=curve,
+        direction=direction,
+        online=True,
+    )
+
+    elbow_x = kl.knee  # This is in x_work space
+    if elbow_x is not None and log_x:
+        elbow_x = 10**elbow_x  # Convert back to original space
+
+    # Defensively access internals
+    try:
+        x_normalized = kl.x_normalized
+    except AttributeError:
+        x_normalized = None
+
+    try:
+        y_normalized = kl.y_normalized
+    except AttributeError:
+        y_normalized = None
+
+    try:
+        y_diff = kl.y_difference
+    except AttributeError:
+        # Try alternative name
+        try:
+            y_diff = kl.Ds_y
+        except AttributeError:
+            y_diff = None
+
+    # Create 4-panel figure
+    fig, axes = plt.subplots(2, 2, figsize=config.figsize_elbow_internals, dpi=config.dpi)
+    axes = axes.flatten()
+
+    cmap = plt.get_cmap(config.cmap)
+
+    # Panel 1: Original curve
+    ax1 = axes[0]
+    ax1.plot(x, y, "o-", linewidth=2, markersize=4, alpha=0.7, color=cmap(0.3))
+    if elbow_x is not None:
+        # Find y-value at elbow
+        elbow_idx = np.argmin(np.abs(x - elbow_x))
+        elbow_y = y[elbow_idx]
+        ax1.scatter(
+            [elbow_x],
+            [elbow_y],
+            s=200,
+            c="red",
+            zorder=5,
+            marker="*",
+            edgecolors="black",
+            linewidths=1.5,
+        )
+        ax1.axvline(elbow_x, color="red", linestyle="--", alpha=0.5, linewidth=2)
+        ax1.legend([f"Elbow at x={elbow_x:.4g}"], loc="best")
+    ax1.set_xlabel("x")
+    ax1.set_ylabel("y")
+    ax1.set_title("Original Curve")
+    ax1.grid(True, alpha=0.3)
+
+    # Panel 2: Normalized curve
+    ax2 = axes[1]
+    if y_normalized is not None and x_normalized is not None:
+        ax2.plot(
+            x_normalized, y_normalized, "o-", linewidth=2, markersize=4, alpha=0.7, color=cmap(0.5)
+        )
+        if elbow_x is not None:
+            # Find elbow in normalized coordinates
+            elbow_idx = np.argmin(np.abs(x - elbow_x))
+            elbow_x_norm = x_normalized[elbow_idx]
+            ax2.scatter(
+                [elbow_x_norm],
+                [y_normalized[elbow_idx]],
+                s=200,
+                c="red",
+                zorder=5,
+                marker="*",
+                edgecolors="black",
+                linewidths=1.5,
+            )
+        ax2.set_title("Normalized Curve")
+    else:
+        ax2.text(
+            0.5,
+            0.5,
+            "Normalized data unavailable\n(KneeLocator internals)",
+            ha="center",
+            va="center",
+            transform=ax2.transAxes,
+            fontsize=10,
+        )
+        ax2.set_title("Normalized Curve (N/A)")
+    ax2.set_xlabel("Normalized x")
+    ax2.set_ylabel("Normalized y")
+    ax2.grid(True, alpha=0.3)
+
+    # Panel 3: Difference curve
+    ax3 = axes[2]
+    if y_diff is not None:
+        # Use original x values for consistency with Panel 1
+        # y_diff should have same length as x
+        x_diff = x[: len(y_diff)]
+        ax3.plot(x_diff, y_diff, "o-", linewidth=2, markersize=4, alpha=0.7, color=cmap(0.7))
+        # Mark maximum (this indicates the elbow)
+        max_idx = np.argmax(y_diff)
+        ax3.scatter(
+            [x_diff[max_idx]],
+            [y_diff[max_idx]],
+            s=200,
+            c="green",
+            zorder=5,
+            marker="^",
+            edgecolors="black",
+            linewidths=1.5,
+        )
+        ax3.axvline(x_diff[max_idx], color="green", linestyle="--", alpha=0.5)
+        ax3.set_title("Difference Curve (Curvature)")
+    else:
+        ax3.text(
+            0.5,
+            0.5,
+            "Difference curve unavailable\n(KneeLocator internals)",
+            ha="center",
+            va="center",
+            transform=ax3.transAxes,
+            fontsize=10,
+        )
+        ax3.set_title("Difference Curve (N/A)")
+    ax3.set_xlabel("x")
+    ax3.set_ylabel("Difference")
+    ax3.grid(True, alpha=0.3)
+
+    # Panel 4: Summary with annotation
+    ax4 = axes[3]
+    ax4.plot(x, y, "o-", linewidth=2, markersize=4, alpha=0.7, color=cmap(0.3))
+    if elbow_x is not None:
+        elbow_idx = np.argmin(np.abs(x - elbow_x))
+        elbow_y = y[elbow_idx]
+        ax4.scatter(
+            [elbow_x],
+            [elbow_y],
+            s=200,
+            c="red",
+            zorder=5,
+            marker="*",
+            edgecolors="black",
+            linewidths=1.5,
+        )
+        ax4.axvline(elbow_x, color="red", linestyle="--", alpha=0.5, linewidth=2)
+        # Add text annotation
+        ax4.annotate(
+            f"Elbow\n({elbow_x:.4g}, {elbow_y:.4g})",
+            xy=(elbow_x, elbow_y),
+            xytext=(15, 15),
+            textcoords="offset points",
+            bbox=dict(boxstyle="round,pad=0.5", fc="yellow", alpha=0.7),
+            arrowprops=dict(arrowstyle="->", connectionstyle="arc3,rad=0"),
+        )
+        ax4.set_title("Elbow Detection Summary")
+    else:
+        ax4.text(
+            0.5,
+            0.5,
+            "No elbow detected\n(linear or insufficient curvature)",
+            ha="center",
+            va="center",
+            transform=ax4.transAxes,
+            fontsize=10,
+            bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+        )
+        ax4.set_title("Elbow Detection Summary - No Elbow")
+    ax4.set_xlabel("x")
+    ax4.set_ylabel("y")
+    ax4.grid(True, alpha=0.3)
+
+    # Apply log scale if requested
+    if log_x:
+        for ax in [ax1, ax2, ax3, ax4]:
+            ax.set_xscale("log")
+
+    fig.tight_layout()
+    return fig
+
+
+def plot_quantile_elbows_detailed(
+    result: InteriorResult | BoundaryResult,
+    config: PlotConfig | None = None,
+) -> Figure:
+    """Visualize quantile elbow points before aggregation.
+
+    Creates scatter plots showing the relationship between quantile values and their
+    corresponding detected elbow thresholds. This visualization helps diagnose the
+    multi-curve threshold estimation used in quantile-based stickiness detection.
+
+    For InteriorResult:
+        - Single panel with quantile (x-axis) vs epsilon threshold (y-axis, log scale)
+        - Scatter points colored by quantile value using colormap gradient
+        - Horizontal reference line at eps_star (aggregated median threshold)
+        - Filters out None values (quantiles where no elbow was detected)
+
+    For BoundaryResult:
+        - Two panels (lower and upper boundaries)
+        - Each panel: quantile (x-axis) vs tolerance threshold (y-axis, linear scale)
+        - Separate scatter plots for lower_elbows and upper_elbows
+        - Horizontal reference lines at t_lo_star and t_hi_star
+
+    Args:
+        result: InteriorResult or BoundaryResult with quantile_elbows populated.
+        config: PlotConfig for styling. If None, uses defaults.
+
+    Returns:
+        matplotlib Figure object. Caller is responsible for displaying or saving.
+
+    Note:
+        If result.quantile_elbows is None or empty, returns a figure with an
+        informative message explaining that quantile analysis is not available.
+
+    Example:
+        >>> from fitqc import run_interior_qc, InteriorConfig, PlotConfig
+        >>> from fitqc.plot import plot_quantile_elbows_detailed
+        >>>
+        >>> config = InteriorConfig(use_quantile_analysis=True)
+        >>> result = run_interior_qc(x, x0=0.5, L=0.0, U=1.0, config=config)
+        >>> fig = plot_quantile_elbows_detailed(result, PlotConfig())
+        >>> fig.savefig("quantile_elbows_detailed.png")
+    """
+    # Handle config
+    if config is None:
+        config = PlotConfig()
+
+    # Determine result type
+    is_interior = isinstance(result, InteriorResult)
+
+    # Handle None or empty quantile_elbows
+    if result.quantile_elbows is None or (
+        isinstance(result.quantile_elbows, dict) and len(result.quantile_elbows) == 0
+    ):
+        # Create empty figure with message
+        fig, ax = plt.subplots(figsize=config.figsize_tolerance, dpi=config.dpi)
+        ax.text(
+            0.5,
+            0.5,
+            "No quantile analysis data available\n\n"
+            "Enable quantile analysis in config:\n"
+            f"config = {'InteriorConfig' if is_interior else 'BoundaryConfig'}(use_quantile_analysis=True)",
+            ha="center",
+            va="center",
+            fontsize=12,
+            bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+        )
+        ax.set_title("Quantile Elbow Analysis - No Data")
+        ax.axis("off")
+        return fig
+
+    # Branch based on result type
+    if is_interior:
+        return _plot_interior_quantile_elbows_detailed(result, config)
+    else:
+        return _plot_boundary_quantile_elbows_detailed(result, config)
+
+
+def _plot_interior_quantile_elbows_detailed(result: InteriorResult, config: PlotConfig) -> Figure:
+    """Plot quantile elbows for InteriorResult (detailed view)."""
+    fig, ax = plt.subplots(figsize=config.figsize_tolerance, dpi=config.dpi)
+    cmap = plt.get_cmap(config.cmap)
+
+    # Filter valid elbows (non-None)
+    quantile_elbows = result.quantile_elbows
+    valid_data = {q: eps for q, eps in quantile_elbows.items() if eps is not None}
+
+    if len(valid_data) == 0:
+        # All None - show message
+        ax.text(
+            0.5,
+            0.5,
+            "All quantile elbows are None\n(no elbows detected for any quantile)",
+            ha="center",
+            va="center",
+            fontsize=12,
+            bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+        )
+        ax.set_title("Interior Quantile Elbows - All None")
+        ax.axis("off")
+        return fig
+
+    # Extract x, y for scatter
+    quantiles = list(valid_data.keys())
+    epsilons = list(valid_data.values())
+
+    # Sort by quantile for consistent ordering
+    sorted_indices = np.argsort(quantiles)
+    quantiles = np.array(quantiles)[sorted_indices]
+    epsilons = np.array(epsilons)[sorted_indices]
+
+    # Colormap colors
+    norm = Normalize(vmin=quantiles.min(), vmax=quantiles.max())
+    colors = [cmap(norm(q)) for q in quantiles]
+
+    # Scatter plot - single scatter call with all points for proper collection handling
+    ax.scatter(
+        quantiles,
+        epsilons,
+        c=colors,
+        s=100,
+        zorder=3,
+        edgecolors="black",
+        linewidths=0.5,
+    )
+
+    # Add individual labels (for legend, if needed)
+    for q, eps in zip(quantiles, epsilons, strict=True):
+        # Only add to legend if few enough points
+        if len(quantiles) <= 8:
+            ax.plot([], [], "o", color=cmap(norm(q)), label=f"q={q:.3f}: eps={eps:.2e}")
+
+    # Reference line at eps_star (median aggregation)
+    if result.eps_star is not None:
+        ax.axhline(
+            result.eps_star,
+            color="red",
+            linestyle="--",
+            linewidth=2,
+            alpha=0.7,
+            label=f"eps* (median) = {result.eps_star:.2e}",
+        )
+
+    # Labels and formatting
+    ax.set_xlabel("Quantile")
+    ax.set_ylabel("Epsilon (elbow threshold)")
+    ax.set_yscale("log")  # Epsilon spans orders of magnitude
+    ax.set_title("Interior Quantile Elbow Analysis")
+    ax.grid(True, alpha=0.3)
+
+    # Legend (limit if many points)
+    if len(quantiles) <= 8:
+        ax.legend(loc="best", fontsize=8)
+    else:
+        # Just show eps_star line
+        handles, labels = ax.get_legend_handles_labels()
+        eps_star_idx = [i for i, label in enumerate(labels) if "eps*" in label]
+        if eps_star_idx:
+            ax.legend([handles[eps_star_idx[0]]], [labels[eps_star_idx[0]]], loc="best")
+
+    fig.tight_layout()
+    return fig
+
+
+def _plot_boundary_quantile_elbows_detailed(result: BoundaryResult, config: PlotConfig) -> Figure:
+    """Plot quantile elbows for BoundaryResult (2 panels)."""
+    fig, axes = plt.subplots(1, 2, figsize=config.figsize_tolerance, dpi=config.dpi)
+    cmap = plt.get_cmap(config.cmap)
+
+    quantile_elbows = result.quantile_elbows
+
+    # Process lower boundary
+    if "lower" in quantile_elbows:
+        ax_lower = axes[0]
+        lower_elbows = quantile_elbows["lower"]
+        valid_lower = {q: tol for q, tol in lower_elbows.items() if tol is not None}
+
+        if len(valid_lower) > 0:
+            quantiles_l = np.array(sorted(valid_lower.keys()))
+            tolerances_l = np.array([valid_lower[q] for q in quantiles_l])
+
+            norm = Normalize(vmin=quantiles_l.min(), vmax=quantiles_l.max())
+            colors = [cmap(norm(q)) for q in quantiles_l]
+
+            # Single scatter call with all points
+            ax_lower.scatter(
+                quantiles_l,
+                tolerances_l,
+                c=colors,
+                s=100,
+                zorder=3,
+                edgecolors="black",
+                linewidths=0.5,
+            )
+
+            if result.t_lo_star is not None:
+                ax_lower.axhline(
+                    result.t_lo_star,
+                    color="red",
+                    linestyle="--",
+                    linewidth=2,
+                    alpha=0.7,
+                    label=f"t_lo* = {result.t_lo_star:.4f}",
+                )
+                ax_lower.legend(loc="best")
+
+        ax_lower.set_xlabel("Quantile")
+        ax_lower.set_ylabel("Tolerance (elbow threshold)")
+        ax_lower.set_title("Lower Boundary Quantile Elbows")
+        ax_lower.grid(True, alpha=0.3)
+
+    # Process upper boundary
+    if "upper" in quantile_elbows:
+        ax_upper = axes[1]
+        upper_elbows = quantile_elbows["upper"]
+        valid_upper = {q: tol for q, tol in upper_elbows.items() if tol is not None}
+
+        if len(valid_upper) > 0:
+            quantiles_u = np.array(sorted(valid_upper.keys()))
+            tolerances_u = np.array([valid_upper[q] for q in quantiles_u])
+
+            norm = Normalize(vmin=quantiles_u.min(), vmax=quantiles_u.max())
+            colors = [cmap(norm(q)) for q in quantiles_u]
+
+            # Single scatter call with all points
+            ax_upper.scatter(
+                quantiles_u,
+                tolerances_u,
+                c=colors,
+                s=100,
+                zorder=3,
+                edgecolors="black",
+                linewidths=0.5,
+            )
+
+            if result.t_hi_star is not None:
+                ax_upper.axhline(
+                    result.t_hi_star,
+                    color="red",
+                    linestyle="--",
+                    linewidth=2,
+                    alpha=0.7,
+                    label=f"t_hi* = {result.t_hi_star:.4f}",
+                )
+                ax_upper.legend(loc="best")
+
+        ax_upper.set_xlabel("Quantile")
+        ax_upper.set_ylabel("Tolerance (elbow threshold)")
+        ax_upper.set_title("Upper Boundary Quantile Elbows")
+        ax_upper.grid(True, alpha=0.3)
+
+    fig.tight_layout()
+    return fig

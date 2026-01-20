@@ -207,6 +207,8 @@ class PlotConfig:
         figsize_interior: Figure size for interior diagnostics.
         figsize_boundary: Figure size for boundary diagnostics.
         figsize_tolerance: Figure size for tolerance overlay visualizations.
+        figsize_elbow_internals: Figure size for elbow detection internals visualization.
+        figsize_quantile_detailed: Figure size for detailed quantile elbow visualization.
     """
 
     cmap: str = "Spectral_r"
@@ -215,6 +217,8 @@ class PlotConfig:
     figsize_interior: tuple[float, float] = (12, 8)
     figsize_boundary: tuple[float, float] = (14, 10)
     figsize_tolerance: tuple[float, float] = (12, 8)
+    figsize_elbow_internals: tuple[float, float] = (16, 10)
+    figsize_quantile_detailed: tuple[float, float] = (14, 8)
 
 
 @dataclass

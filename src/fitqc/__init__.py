@@ -56,7 +56,9 @@ from fitqc.plot import (
     plot_ecdf_tolerance_overlays,
     plot_histogram_tolerance_overlays,
     plot_interior_diagnostics,
+    plot_kneedle_internals,
     plot_quantile_elbow_overlay,
+    plot_quantile_elbows_detailed,
     plot_quantile_spacing_overlays,
 )
 
@@ -103,7 +105,9 @@ __all__ = [
     "plot_ecdf_tolerance_overlays",
     "plot_histogram_tolerance_overlays",
     "plot_interior_diagnostics",
+    "plot_kneedle_internals",
     "plot_quantile_elbow_overlay",
+    "plot_quantile_elbows_detailed",
     "plot_quantile_spacing_overlays",
     "run_boundary_qc",
     "run_interior_qc",
