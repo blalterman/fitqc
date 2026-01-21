@@ -230,7 +230,7 @@ ax8.set_ylabel('Cumulative Fraction', fontsize=10)
 ax8.set_title('CDF - Lower Boundary Zoom', fontsize=11, fontweight='bold')
 ax8.legend(fontsize=8, loc='lower right')
 ax8.grid(True, alpha=0.2, zorder=0)
-ax8.set_xlim(0, 0.2)  # Expanded to show jump in context
+ax8.set_xlim(-0.01, 0.2)  # Extended below 0 to show out-of-bounds jumps
 
 # 9. Cumulative distribution - upper boundary zoom
 ax9 = plt.subplot(4, 3, 9)
@@ -253,7 +253,7 @@ ax9.set_ylabel('Cumulative Fraction', fontsize=10)
 ax9.set_title('CDF - Upper Boundary Zoom', fontsize=11, fontweight='bold')
 ax9.legend(fontsize=8, loc='lower right')
 ax9.grid(True, alpha=0.2, zorder=0)
-ax9.set_xlim(0.8, 1.0)  # Focus on upper boundary region
+ax9.set_xlim(0.8, 1.01)  # Extended above 1 to show out-of-bounds jumps
 
 # 10. Cumulative distribution - full range
 ax10 = plt.subplot(4, 3, 10)
@@ -279,10 +279,10 @@ ax10.plot(u_sorted, cumulative, color='darkgreen', linewidth=2.5, zorder=2)
 
 ax10.set_xlabel('Normalized u', fontsize=10)
 ax10.set_ylabel('Cumulative Fraction', fontsize=10)
-ax10.set_title('CDF - Full Range [0, 1]', fontsize=11, fontweight='bold')
+ax10.set_title('CDF - Full Range (extended)', fontsize=11, fontweight='bold')
 ax10.legend(fontsize=7, loc='center right')
 ax10.grid(True, alpha=0.2, zorder=0)
-ax10.set_xlim(0, 1.0)
+ax10.set_xlim(-0.01, 1.01)  # Extended to show out-of-bounds jumps if present
 
 # 11 & 12. Summary statistics text (split into two columns)
 ax11 = plt.subplot(4, 3, 11)
