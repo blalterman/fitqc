@@ -344,12 +344,12 @@ plt.suptitle('A_He Ultra-High-Resolution Analysis (12 panels: histograms + CDFs)
 plt.tight_layout(rect=[0, 0, 1, 0.995])
 
 # Save
-output_path = Path("figures/A_He_improved_analysis.png")
-output_path.parent.mkdir(exist_ok=True)
+output_path = Path("figures/A_He/A_He_improved_analysis.png")
+output_path.parent.mkdir(exist_ok=True, parents=True)
 plt.savefig(output_path, dpi=150, bbox_inches='tight')
 print(f"\nSaved: {output_path}")
 
-output_path_hires = Path("figures/A_He_improved_analysis_hires.png")
+output_path_hires = Path("figures/A_He/A_He_improved_analysis_hires.png")
 plt.savefig(output_path_hires, dpi=300, bbox_inches='tight')
 print(f"Saved: {output_path_hires}")
 
