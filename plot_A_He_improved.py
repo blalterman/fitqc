@@ -230,7 +230,7 @@ ax8.set_ylabel('Cumulative Fraction', fontsize=10)
 ax8.set_title('Cumulative Distribution (CDF)', fontsize=11, fontweight='bold')
 ax8.legend(fontsize=8, loc='lower right')
 ax8.grid(True, alpha=0.2, zorder=0)
-ax8.set_xlim(0, 0.05)  # Focus on lower boundary region
+ax8.set_xlim(0, 0.2)  # Expanded to show jump in context
 
 # 9. Summary statistics text
 ax9 = plt.subplot(3, 3, 9)
