@@ -767,15 +767,18 @@ def plot_bounds_filter_comparison(
     U: float,
     bins: int | str = "auto",
     config: PlotConfig | None = None,
+    show_detail: bool = True,
 ) -> Figure:
     """Plot comparison of data before and after bounds filtering.
 
     Creates high-resolution histograms showing:
     - Original data (including out-of-bounds samples)
     - Filtered data (only samples within [L, U])
+    - Out-of-bounds detail panel (if show_detail=True and out-of-bounds exist)
 
-    Both histograms use the same binning for direct comparison. This
-    visualizes the effectiveness of the bounds validation filter.
+    Both histograms use the same binning for direct comparison. When out-of-bounds
+    samples exist and show_detail=True, a third panel shows a zoomed view of the
+    out-of-bounds region to make the filtering impact visible.
 
     Args:
         x: Array of parameter values (unfiltered).
@@ -784,9 +787,12 @@ def plot_bounds_filter_comparison(
         bins: Number of bins or binning strategy ('auto', 'fd', 'sturges', etc.).
             Default is 'auto' which uses numpy's histogram bin selection.
         config: PlotConfig for styling. Uses defaults if None.
+        show_detail: If True and out-of-bounds samples exist, add a third panel
+            showing a zoomed view of the out-of-bounds region. Default is True.
 
     Returns:
-        Figure with two subplots showing unfiltered and filtered distributions.
+        Figure with 2-3 subplots showing unfiltered and filtered distributions,
+        plus optional detail panel for out-of-bounds region.
 
     Examples:
         >>> from fitqc.plot import plot_bounds_filter_comparison
@@ -820,8 +826,13 @@ def plot_bounds_filter_comparison(
     n_out_of_bounds = n_below + n_above
     n_filtered = len(x_filtered)
 
-    # Create figure with two subplots (vertical layout for easier comparison)
-    fig, axes = plt.subplots(2, 1, figsize=(10, 8), dpi=config.dpi)
+    # Determine if we need a detail panel
+    has_out_of_bounds = n_out_of_bounds > 0
+    n_panels = 3 if (show_detail and has_out_of_bounds) else 2
+
+    # Create figure with subplots (vertical layout for easier comparison)
+    figsize = (10, 12) if n_panels == 3 else (10, 8)
+    fig, axes = plt.subplots(n_panels, 1, figsize=figsize, dpi=config.dpi)
 
     # Determine bin edges from full data range for consistent binning
     # Extend slightly beyond [L, U] to capture out-of-bounds samples
@@ -894,6 +905,95 @@ def plot_bounds_filter_comparison(
     y_max_overall = max(counts_unfiltered.max(), counts_filtered.max()) * 1.1
     ax_unfiltered.set_ylim(0, y_max_overall)
     ax_filtered.set_ylim(0, y_max_overall)
+
+    # Third panel: Out-of-bounds detail (if needed)
+    if n_panels == 3:
+        ax_detail = axes[2]
+
+        # Determine zoom range based on where out-of-bounds samples are
+        valid_range = U - L
+        margin = valid_range * 0.05  # 5% of valid range as margin
+
+        if n_below > 0 and n_above > 0:
+            # Out-of-bounds on both sides - show both regions
+            zoom_label = "Out-of-Bounds Detail (Both Regions)"
+            zoom_x_min = x_min
+            zoom_x_max = x_max
+        elif n_below > 0:
+            # Out-of-bounds below L - zoom to that region
+            zoom_x_min = x_min
+            zoom_x_max = min(L + margin, U)
+            zoom_label = f"Out-of-Bounds Detail (Below L: [{x_min:.3g}, {zoom_x_max:.3g}])"
+        else:  # n_above > 0
+            # Out-of-bounds above U - zoom to that region
+            zoom_x_min = max(U - margin, L)
+            zoom_x_max = x_max
+            zoom_label = f"Out-of-Bounds Detail (Above U: [{zoom_x_min:.3g}, {x_max:.3g}])"
+
+        # Create bins for zoom range
+        zoom_range_width = zoom_x_max - zoom_x_min
+        if isinstance(bins, str):
+            # Use auto binning for zoom region
+            _, zoom_bin_edges = np.histogram(
+                x[(x >= zoom_x_min) & (x <= zoom_x_max)],
+                bins=bins,
+                range=(zoom_x_min, zoom_x_max)
+            )
+        else:
+            # Use same bin density as main plot
+            main_range_width = x_max - x_min
+            zoom_bin_count = max(int(bins * zoom_range_width / main_range_width), 20)
+            zoom_bin_edges = np.linspace(zoom_x_min, zoom_x_max, zoom_bin_count + 1)
+
+        # Plot original data in zoom range
+        x_zoom_original = x[(x >= zoom_x_min) & (x <= zoom_x_max)]
+        counts_zoom_orig, _, _ = ax_detail.hist(
+            x_zoom_original,
+            bins=zoom_bin_edges,
+            histtype="stepfilled",
+            alpha=0.5,
+            color="steelblue",
+            edgecolor="black",
+            linewidth=0.5,
+            label=f"Original (n={len(x_zoom_original):,})"
+        )
+
+        # Plot filtered data in zoom range (should be much less or zero in out-of-bounds)
+        x_zoom_filtered = x_filtered[(x_filtered >= zoom_x_min) & (x_filtered <= zoom_x_max)]
+        counts_zoom_filt, _, _ = ax_detail.hist(
+            x_zoom_filtered,
+            bins=zoom_bin_edges,
+            histtype="stepfilled",
+            alpha=0.5,
+            color="mediumseagreen",
+            edgecolor="black",
+            linewidth=0.5,
+            label=f"Filtered (n={len(x_zoom_filtered):,})"
+        )
+
+        # Add vertical lines at bounds
+        if zoom_x_min < L < zoom_x_max:
+            ax_detail.axvline(L, color="red", linestyle="--", linewidth=1.5,
+                            label=f"L={L}", alpha=0.7)
+        if zoom_x_min < U < zoom_x_max:
+            ax_detail.axvline(U, color="red", linestyle="--", linewidth=1.5,
+                            label=f"U={U}", alpha=0.7)
+
+        # Shade out-of-bounds regions
+        if n_below > 0 and zoom_x_min < L:
+            ax_detail.axvspan(zoom_x_min, min(L, zoom_x_max), alpha=0.2, color="red")
+        if n_above > 0 and zoom_x_max > U:
+            ax_detail.axvspan(max(U, zoom_x_min), zoom_x_max, alpha=0.2, color="red")
+
+        ax_detail.set_xlabel("Parameter value")
+        ax_detail.set_ylabel("Count")
+        ax_detail.set_title(
+            f"{zoom_label}\n"
+            f"Removed: {n_out_of_bounds:,} samples ({n_out_of_bounds/n_total:.2%})"
+        )
+        ax_detail.grid(True, alpha=0.3)
+        ax_detail.legend(loc="best", fontsize=8)
+        ax_detail.set_xlim(zoom_x_min, zoom_x_max)
 
     fig.tight_layout()
 
