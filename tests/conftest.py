@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
+import pyarrow.parquet as pq
 import pytest
 
 # =============================================================================
@@ -67,7 +67,7 @@ def a_he_values(a_he_test_data_path) -> np.ndarray:
         - Mean ~3.55, Std ~2.86
     """
     data_path = a_he_test_data_path / "A_He_test_sample.parquet"
-    return pd.read_parquet(data_path)["values"].values
+    return pq.read_table(data_path)["values"].to_numpy()
 
 
 @pytest.fixture
@@ -109,7 +109,7 @@ def _load_test_case(data_dir: Path, name: str) -> dict:
     Returns:
         Dictionary with values, L, U, x0, expected
     """
-    values = pd.read_parquet(data_dir / f"{name}_test_sample.parquet")["values"].values
+    values = pq.read_table(data_dir / f"{name}_test_sample.parquet")["values"].to_numpy()
     with open(data_dir / f"{name}_test_metadata.json") as f:
         meta = json.load(f)
     return {
