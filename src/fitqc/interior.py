@@ -265,20 +265,48 @@ def run_interior_qc(
     U: float,
     config: InteriorConfig | None = None,
 ) -> InteriorResult:
-    """Run interior QC analysis to detect x0 stickiness.
+    """Detect initial guess stickiness (samples stuck at x0).
 
-    This function detects whether optimization results are stuck at the initial
-    guess x0 by looking for a narrow spike in the z-distribution (distance from x0).
+    This function DETECTS when samples cluster too close to the initial guess x0,
+    which indicates the optimizer failed to explore the parameter space. It does
+    NOT filter the data - filtering is performed separately using the returned
+    detection threshold.
+
+    Important Terminology Note:
+    - "Interior" refers to x0 as an interior point in the parameter space
+    - This does NOT mean "interior region" (away from boundaries)
+    - Better mental model: This detects "x0 stickiness" or "initial guess stickiness"
+
+    The detection works by:
+    1. Normalizing distances from x0: z = |x - x0| / (U - L)
+    2. Building histogram of z-values to detect narrow spike at z ≈ 0
+    3. Using scipy.signal.find_peaks to locate spike
+    4. Using elbow detection on mass curve to find threshold
+    5. Returning detection threshold eps_star
+
+    The threshold can be used to filter x0-sticky samples:
+    - Filter: keep samples with |x - x0| / (U - L) > eps_star
 
     Args:
         x: Array of fitted parameter values.
-        x0: Initial guess value.
+        x0: Initial guess value (the "interior point" to check for stickiness).
         L: Lower bound of the parameter range.
         U: Upper bound of the parameter range.
         config: Configuration for the analysis. If None, uses default InteriorConfig.
 
     Returns:
-        InteriorResult containing detection results and diagnostic data.
+        InteriorResult with:
+        - spike_detected: True if samples cluster at x0
+        - spike_z_loc: Location of spike in z-space (typically near 0)
+        - eps_star: Detection threshold (None if no spike detected)
+        - Mass curve, histogram, and epsilon grid for visualization
+
+    Examples:
+        >>> # Detect x0 stickiness
+        >>> result = run_interior_qc(x, x0=2.5, L=0.0, U=25.0)
+        >>> if result.spike_detected:
+        ...     print(f"Initial guess stickiness detected at eps < {result.eps_star:.4f}")
+        ...     # Filter: compute z = |x - 2.5| / 25.0, keep x[z > result.eps_star]
     """
     if config is None:
         config = InteriorConfig()

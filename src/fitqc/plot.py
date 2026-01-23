@@ -769,16 +769,28 @@ def plot_bounds_filter_comparison(
     config: PlotConfig | None = None,
     show_detail: bool = True,
 ) -> Figure:
-    """Plot comparison of data before and after bounds filtering.
+    """Visualize removal of out-of-bounds samples (x < L or x > U).
 
-    Creates high-resolution histograms showing:
-    - Original data (including out-of-bounds samples)
+    IMPORTANT: Despite the name "bounds filter", this visualization shows removal
+    of OUT-OF-BOUNDS samples (x < L or x > U), NOT boundary-sticky samples (too
+    close to L or U). For boundary stickiness filtering, see plot_combined_filter_comparison().
+
+    Creates histograms showing:
+    - Original data (including any out-of-bounds samples)
     - Filtered data (only samples within [L, U])
     - Out-of-bounds detail panel (if show_detail=True and out-of-bounds exist)
 
-    Both histograms use the same binning for direct comparison. When out-of-bounds
-    samples exist and show_detail=True, a third panel shows a zoomed view of the
-    out-of-bounds region to make the filtering impact visible.
+    When out-of-bounds samples exist, the third panel zooms in to show the
+    filtered region clearly, making the impact visible even when out-of-bounds
+    samples are spatially compressed.
+
+    What gets removed:
+    - x < L (below lower bound) - typically from failed fits
+    - x > U (above upper bound) - typically from failed fits
+
+    What does NOT get removed:
+    - Samples AT the boundaries (x = L or x = U) - these are valid
+    - Samples NEAR the boundaries - use combined filter for this
 
     Args:
         x: Array of parameter values (unfiltered).
@@ -795,15 +807,15 @@ def plot_bounds_filter_comparison(
         plus optional detail panel for out-of-bounds region.
 
     Examples:
-        >>> from fitqc.plot import plot_bounds_filter_comparison
-        >>> import numpy as np
-        >>> # Data with some out-of-bounds samples
+        >>> # Dataset with failed fits at x=0 (out-of-bounds for L=0.01)
         >>> x = np.concatenate([
-        ...     np.zeros(100),  # Failed fits at 0
+        ...     np.zeros(100),  # Out-of-bounds (x < L)
         ...     np.random.uniform(0.01, 100, 9900)  # Valid data
         ... ])
-        >>> fig = plot_bounds_filter_comparison(x, L=0.01, U=100.0, bins=200)
-        >>> fig.savefig("bounds_filter_comparison.png")
+        >>> fig = plot_bounds_filter_comparison(x, L=0.01, U=100.0)
+        >>> # Panel 1: Shows all 10,000 samples including spike at x=0
+        >>> # Panel 2: Shows 9,900 samples (out-of-bounds removed)
+        >>> # Panel 3: Zoomed view of [0, 0.01] region showing the removal
     """
     # Validate inputs
     if L >= U:
@@ -1009,14 +1021,28 @@ def plot_interior_filter_comparison(
     bins: int | str = "auto",
     config: PlotConfig | None = None,
 ) -> Figure:
-    """Plot comparison of data before and after interior (x0) stickiness filtering.
+    """Visualize removal of x0-sticky samples (initial guess stickiness).
 
-    Creates high-resolution histograms showing:
-    - Original data (including x0-stuck samples)
-    - Filtered data (only samples not stuck at x0)
+    IMPORTANT TERMINOLOGY NOTE:
+    Despite the name "interior filter", this shows removal of samples stuck
+    at the INITIAL GUESS x0, NOT samples in the "interior region" of parameter
+    space. The term "interior" refers to x0 as an interior point (i.e., not at
+    the boundaries L or U).
 
-    Both histograms use the same binning for direct comparison. This
-    visualizes the effectiveness of the interior QC filter.
+    Better mental model: "x0 stickiness filter" or "initial guess filter"
+
+    What gets removed:
+    - Samples too close to x0 (|x - x0| / (U - L) < eps_star)
+    - Indicates optimizer failed to explore away from initial guess
+
+    What does NOT get removed:
+    - Samples far from boundaries (these are valid, high-quality fits)
+    - Samples near x0 if no stickiness is detected (threshold not exceeded)
+
+    See Also:
+    - run_interior_qc(): Detection function that identifies x0-sticky samples
+    - plot_combined_filter_comparison(): Shows ALL THREE filter types together
+    - README.md: "Understanding Filter Terminology" section
 
     Args:
         x: Array of parameter values (unfiltered).
@@ -1028,13 +1054,15 @@ def plot_interior_filter_comparison(
         config: PlotConfig for styling. Uses defaults if None.
 
     Returns:
-        Figure with two subplots showing unfiltered and filtered distributions.
+        Figure with two subplots:
+        - Panel 1: Original data (including x0-stuck samples)
+        - Panel 2: Filtered data (x0-sticky samples removed)
 
     Examples:
         >>> from fitqc import run_interior_qc, plot_interior_filter_comparison
-        >>> # Run interior QC
+        >>> # Run interior QC to detect x0 stickiness
         >>> result = run_interior_qc(x, x0=1.0, L=0.0, U=10.0)
-        >>> # Visualize filtering impact
+        >>> # Visualize x0-sticky sample removal
         >>> fig = plot_interior_filter_comparison(x, 1.0, 0.0, 10.0, result)
         >>> fig.savefig("interior_filter.png")
     """
@@ -1151,16 +1179,48 @@ def plot_combined_filter_comparison(
     bins: int | str = "auto",
     config: PlotConfig | None = None,
 ) -> Figure:
-    """Plot combined interior and boundary filtering impact.
+    """Visualize removal of ALL THREE filter types: out-of-bounds, boundary-sticky, and x0-sticky.
 
-    Creates high-resolution histograms showing progressive filtering:
-    1. Original data
-    2. After boundary filtering only
-    3. After interior filtering only (if applicable)
-    4. After both filters combined
+    IMPORTANT: This is where boundary spikes disappear! Panel 2 ("Boundary Filter Only")
+    still shows boundary spikes because it only removes out-of-bounds (x < L or x > U).
+    Panel 4 ("Combined Filters") applies BOTH boundary stickiness detection AND
+    out-of-bounds filtering, which is why the spikes disappear there.
 
-    All histograms use the same binning for direct comparison. This
-    visualizes the full QC pipeline effectiveness.
+    Four Progressive Filtering Stages:
+
+    Panel 1: Original Data
+    - All samples (unfiltered)
+    - Shows out-of-bounds + boundary spikes + x0 spikes (if applicable)
+
+    Panel 2: "Boundary Filter Only"
+    - Removes: Out-of-bounds samples (x < L or x > U)
+    - Still shows: Boundary spikes (samples AT L or U)
+    - Still shows: x0 spikes (if applicable)
+    - For datasets with all x ∈ [L, U]: Identical to Panel 1
+
+    Panel 3: "Interior Filter Only" (if x0 provided)
+    - Removes: x0-sticky samples (|x - x0| / (U - L) < eps_star)
+    - Still shows: Out-of-bounds samples
+    - Still shows: Boundary spikes
+    - Skipped if x0 is None
+
+    Panel 4: "Combined Filters" ⭐ FINAL RESULT
+    - Removes ALL THREE types:
+      1. Out-of-bounds (x < L or x > U)
+      2. Boundary-sticky (too close to L or U)
+      3. x0-sticky (too close to x0, if applicable)
+    - This is where boundary spikes disappear!
+    - Represents the cleanest, highest-quality data
+
+    Understanding the Terminology Confusion:
+    - "Boundary filter" (Panel 2) only removes out-of-bounds, NOT boundary spikes
+    - Boundary spikes are removed by applying boundary_result thresholds in Panel 4
+    - The naming reflects implementation modules, not user-facing effects
+
+    See Also:
+    - plot_bounds_filter_comparison(): Shows only out-of-bounds removal
+    - plot_interior_filter_comparison(): Shows only x0-sticky removal
+    - README.md: "Understanding Filter Terminology" section
 
     Args:
         x: Array of parameter values (unfiltered).
@@ -1168,12 +1228,12 @@ def plot_combined_filter_comparison(
         L: Lower bound of the parameter.
         U: Upper bound of the parameter.
         interior_result: Result from run_interior_qc (None if no x0).
-        boundary_result: Result from run_boundary_qc.
+        boundary_result: Result from run_boundary_qc containing threshold info.
         bins: Number of bins or binning strategy.
         config: PlotConfig for styling. Uses defaults if None.
 
     Returns:
-        Figure with 2x2 grid showing filtering stages.
+        Figure with 2x2 grid showing progressive filtering stages.
 
     Examples:
         >>> from fitqc import run_qc

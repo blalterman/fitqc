@@ -419,11 +419,32 @@ def run_boundary_qc(
     U: float,
     config: BoundaryConfig | None = None,
 ) -> BoundaryResult:
-    """Run boundary QC analysis.
+    """Detect boundary stickiness (pileup near parameter bounds L and U).
 
-    Detects pileup at lower and upper parameter bounds by computing the
-    fraction of samples within increasing tolerances of each boundary,
-    then using elbow detection to find where the "stuck" region ends.
+    This function DETECTS when samples cluster too close to the parameter
+    bounds L or U, which indicates the optimizer got stuck at constraints.
+    It does NOT filter the data - filtering is performed separately using
+    the returned detection thresholds.
+
+    Important Distinctions:
+    - **Boundary stickiness** (detected here): Samples AT or NEAR L/U (valid but suspicious)
+      Example: For L=0, U=25, samples at x=0.001 are boundary-sticky
+    - **Out-of-bounds** (NOT detected here): Samples with x < L or x > U (invalid)
+      Example: For L=0, samples at x=-0.5 are out-of-bounds
+
+    Note: If out-of-bounds samples are present, they are excluded from the
+    boundary stickiness analysis and a warning is logged. To remove out-of-bounds
+    samples from your data, use the bounds filter in plot_bounds_filter_comparison().
+
+    The detection works by:
+    1. Normalizing positions: u = (x - L) / (U - L)
+    2. Computing cumulative mass near boundaries at increasing tolerances
+    3. Using elbow detection to find where "stuck" region ends
+    4. Returning detection thresholds (t_lo_star for lower, t_hi_star for upper)
+
+    These thresholds can be used to filter boundary-sticky samples:
+    - Lower boundary filter: keep samples with u > t_lo_star
+    - Upper boundary filter: keep samples with u < t_hi_star
 
     Args:
         x: Array of parameter values to analyze.
@@ -432,7 +453,19 @@ def run_boundary_qc(
         config: Configuration for boundary analysis. Uses defaults if None.
 
     Returns:
-        BoundaryResult with detection flags, optimal tolerances, and mass curves.
+        BoundaryResult with:
+        - lower_pileup_detected: True if samples pile up near L
+        - upper_pileup_detected: True if samples pile up near U
+        - t_lo_star: Threshold for lower boundary (None if not detected)
+        - t_hi_star: Threshold for upper boundary (None if not detected)
+        - Mass curves and tolerance grids for visualization
+
+    Examples:
+        >>> # Detect boundary stickiness
+        >>> result = run_boundary_qc(x, L=0.0, U=25.0)
+        >>> if result.lower_pileup_detected:
+        ...     print(f"Lower boundary stickiness detected at u < {result.t_lo_star:.4f}")
+        ...     # Filter: keep x[u > result.t_lo_star]
     """
     if config is None:
         config = BoundaryConfig()
