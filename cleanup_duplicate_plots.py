@@ -5,8 +5,9 @@ This script removes all non-hires plot versions, keeping only the high-resolutio
 300 DPI versions with _hires suffix.
 """
 
-from pathlib import Path
 import subprocess
+from pathlib import Path
+
 
 def main():
     """Remove all non-hires plot versions."""
@@ -55,10 +56,11 @@ def main():
                 print(f"  ⚠ Skipping {plot.name} (no hires version found)")
         print()
 
-    print("="*70)
+    print("=" * 70)
     print(f"✓ Removed {removed_count} duplicate low-res plots")
     print(f"✓ Kept {len(hires_plots)} high-res (300 DPI) versions")
-    print("="*70)
+    print("=" * 70)
+
 
 if __name__ == "__main__":
     main()

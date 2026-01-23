@@ -78,8 +78,8 @@ Multi-curve detection with progressive grid:
 ...     print(f"Quantile elbows: {result.quantile_elbows['lower']}")
 """
 
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
 
 import numpy as np
 from numpy.typing import NDArray
@@ -255,9 +255,7 @@ def compute_u(x: np.ndarray, L: float, U: float) -> np.ndarray:
 
 
 def _refine_quantile_grid_around_elbow(
-    quantile_grid: np.ndarray,
-    elbow_quantile: float,
-    n_points: int = 15
+    quantile_grid: np.ndarray, elbow_quantile: float, n_points: int = 15
 ) -> np.ndarray:
     """Add intermediate points around an elbow for better resolution.
 
@@ -318,7 +316,7 @@ def _refine_elbow_iteratively(
     tol_grid: np.ndarray,
     quantile_grid: np.ndarray,
     max_iterations: int = 5,
-    convergence_tol: float = 1e-6
+    convergence_tol: float = 1e-6,
 ) -> tuple[float | None, np.ndarray]:
     """Iteratively refine quantile grid to improve elbow detection.
 
@@ -338,20 +336,18 @@ def _refine_elbow_iteratively(
     # Reject elbows within 1% of tol_max (likely boundary artifacts)
     tol_max_threshold = tol_max * 0.99
 
-    for iteration in range(max_iterations):
+    for _iteration in range(max_iterations):
         # Compute quantile curves with current grid
         tol_at_quantile, elbows = _compute_quantile_curves_boundary(
             u_sorted, tol_grid, current_grid
         )
 
         # Filter out elbows that are too close to tol_max (boundary artifacts)
-        filtered_elbows = [
-            e if (e is not None and e < tol_max_threshold) else None
-            for e in elbows
-        ]
+        filtered_elbows = [e if (e is not None and e < tol_max_threshold) else None for e in elbows]
 
         # Aggregate elbows
         from fitqc._quantile_utils import _aggregate_elbows_median
+
         current_elbow = _aggregate_elbows_median(filtered_elbows, min_agreement_frac=0.5)
 
         # If no elbow found, stop iteration
@@ -377,9 +373,7 @@ def _refine_elbow_iteratively(
         elbow_quantile = current_grid[idx]
 
         # Refine grid
-        current_grid = _refine_quantile_grid_around_elbow(
-            current_grid, elbow_quantile, n_points=15
-        )
+        current_grid = _refine_quantile_grid_around_elbow(current_grid, elbow_quantile, n_points=15)
 
         previous_elbow = current_elbow
 
@@ -427,10 +421,11 @@ def run_boundary_qc(
     the returned detection thresholds.
 
     Important Distinctions:
-    - **Boundary stickiness** (detected here): Samples AT or NEAR L/U (valid but suspicious)
-      Example: For L=0, U=25, samples at x=0.001 are boundary-sticky
-    - **Out-of-bounds** (NOT detected here): Samples with x < L or x > U (invalid)
-      Example: For L=0, samples at x=-0.5 are out-of-bounds
+
+    - **Boundary stickiness** (detected here): Samples AT or NEAR L/U (valid but
+      suspicious). Example: For L=0, U=25, samples at x=0.001 are boundary-sticky.
+    - **Out-of-bounds** (NOT detected here): Samples with x < L or x > U (invalid).
+      Example: For L=0, samples at x=-0.5 are out-of-bounds.
 
     Note: If out-of-bounds samples are present, they are excluded from the
     boundary stickiness analysis and a warning is logged. To remove out-of-bounds
@@ -487,8 +482,8 @@ def run_boundary_qc(
         logger.warning(
             f"Boundary QC: {n_out_of_bounds} samples ({frac_out_of_bounds:.2%}) "
             f"are outside parameter bounds [L={L}, U={U}]. "
-            f"Below L: {n_below} ({n_below/n_total:.2%}), "
-            f"Above U: {n_above} ({n_above/n_total:.2%}). "
+            f"Below L: {n_below} ({n_below / n_total:.2%}), "
+            f"Above U: {n_above} ({n_above / n_total:.2%}). "
             f"These samples will be excluded from boundary stickiness analysis. "
             f"Note: Samples outside bounds may indicate fit failures or data quality issues."
         )
@@ -579,8 +574,16 @@ def run_boundary_qc(
             t_hi_raw = _aggregate_elbows_median(elbows_upper, config.min_quantile_agreement)
 
         # Store quantile elbows for diagnostics (use refined grid if available)
-        grid_for_diagnostics_lower = quantile_grid_refined_lower if quantile_grid_refined_lower is not None else quantile_grid_arr
-        grid_for_diagnostics_upper = quantile_grid_refined_upper if quantile_grid_refined_upper is not None else quantile_grid_arr
+        grid_for_diagnostics_lower = (
+            quantile_grid_refined_lower
+            if quantile_grid_refined_lower is not None
+            else quantile_grid_arr
+        )
+        grid_for_diagnostics_upper = (
+            quantile_grid_refined_upper
+            if quantile_grid_refined_upper is not None
+            else quantile_grid_arr
+        )
 
         quantile_elbows_result = {
             "lower": {

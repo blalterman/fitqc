@@ -1,8 +1,9 @@
 """Generate bounds filter comparison plots for all PPA12 test datasets."""
 
 import json
-import pyarrow.parquet as pq
 from pathlib import Path
+
+import pyarrow.parquet as pq
 
 from fitqc import plot_bounds_filter_comparison
 
@@ -42,7 +43,7 @@ for dataset_name in datasets:
     elif range_width > 10:
         bins = 200  # Smaller range (e.g., A_He: 0 to 25)
     else:
-        bins = 'auto'  # Very small range or complex distribution
+        bins = "auto"  # Very small range or complex distribution
 
     print(f"  L={L}, U={U}, range={range_width:.1f}, bins={bins}")
 

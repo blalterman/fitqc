@@ -1,15 +1,16 @@
 """Generate interior and combined filter comparison plots for PPA12 datasets."""
 
 import json
-import pyarrow.parquet as pq
 from pathlib import Path
 
+import pyarrow.parquet as pq
+
 from fitqc import (
-    run_interior_qc,
-    run_boundary_qc,
-    plot_interior_filter_comparison,
-    plot_combined_filter_comparison,
     BoundaryConfig,
+    plot_combined_filter_comparison,
+    plot_interior_filter_comparison,
+    run_boundary_qc,
+    run_interior_qc,
 )
 
 # Output directory for plots
@@ -55,7 +56,7 @@ for dataset_name in datasets:
     elif range_width > 10:
         bins = 200
     else:
-        bins = 'auto'
+        bins = "auto"
 
     print(f"  L={L}, U={U}, x0={x0}, bins={bins}")
 
@@ -84,7 +85,9 @@ for dataset_name in datasets:
         # Create interior filter comparison plot
         print("  Creating interior filter comparison plot...")
         fig = plot_interior_filter_comparison(x, x0, L, U, interior_result, bins=bins)
-        output_file_hires = dataset_output_dir / f"{dataset_name}_interior_filter_comparison_hires.png"
+        output_file_hires = (
+            dataset_output_dir / f"{dataset_name}_interior_filter_comparison_hires.png"
+        )
         fig.savefig(output_file_hires, dpi=300, bbox_inches="tight")
         print(f"  Saved: {output_file_hires}")
     else:
@@ -92,9 +95,7 @@ for dataset_name in datasets:
 
     # Create combined filter comparison plot
     print("  Creating combined filter comparison plot...")
-    fig = plot_combined_filter_comparison(
-        x, x0, L, U, interior_result, boundary_result, bins=bins
-    )
+    fig = plot_combined_filter_comparison(x, x0, L, U, interior_result, boundary_result, bins=bins)
     output_file_hires = dataset_output_dir / f"{dataset_name}_combined_filter_comparison_hires.png"
     fig.savefig(output_file_hires, dpi=300, bbox_inches="tight")
     print(f"  Saved: {output_file_hires}")

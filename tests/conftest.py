@@ -11,7 +11,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-
 # =============================================================================
 # Common fixtures
 # =============================================================================
@@ -345,8 +344,17 @@ def all_ppa12_test_cases() -> dict:
     """
     data_dir = Path(__file__).parent / "data"
     params = [
-        "A_He", "e_dv_ap", "e_dv_pp", "np1", "np2",
-        "vx", "vy", "vz", "w_const",
-        "e_w_p1", "e_w_p2", "e_w_a",
+        "A_He",
+        "e_dv_ap",
+        "e_dv_pp",
+        "np1",
+        "np2",
+        "vx",
+        "vy",
+        "vz",
+        "w_const",
+        "e_w_p1",
+        "e_w_p2",
+        "e_w_a",
     ]
     return {name: _load_test_case(data_dir, name) for name in params}

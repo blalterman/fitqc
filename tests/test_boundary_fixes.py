@@ -15,14 +15,15 @@ Test Philosophy
 - TDD: These tests will FAIL initially (RED), pass after fixes (GREEN)
 """
 
+import time
+from unittest.mock import patch
+
 import numpy as np
 import pytest
-import time
-from unittest.mock import patch, MagicMock, call
 
+from fitqc._quantile_utils import _aggregate_elbows_median
 from fitqc.boundary import run_boundary_qc
 from fitqc.config import BoundaryConfig
-from fitqc._quantile_utils import _aggregate_elbows_median
 
 
 class TestAggregateElbowsSingleElement:
@@ -89,9 +90,7 @@ class TestAggregateElbowsSingleElement:
         """
         # Sufficient agreement (3 of 5 = 60% >= 50%)
         elbows_sufficient = [0.01, 0.02, None, 0.015, None]
-        result_sufficient = _aggregate_elbows_median(
-            elbows_sufficient, min_agreement_frac=0.5
-        )
+        result_sufficient = _aggregate_elbows_median(elbows_sufficient, min_agreement_frac=0.5)
 
         # Behavior: returns median
         assert result_sufficient is not None, "Expected median, got None"
@@ -104,9 +103,7 @@ class TestAggregateElbowsSingleElement:
 
         # Insufficient agreement (2 of 5 = 40% < 50%)
         elbows_insufficient = [0.01, None, None, None, 0.02]
-        result_insufficient = _aggregate_elbows_median(
-            elbows_insufficient, min_agreement_frac=0.5
-        )
+        result_insufficient = _aggregate_elbows_median(elbows_insufficient, min_agreement_frac=0.5)
 
         # Behavior: returns None
         assert result_insufficient is None, (
@@ -186,8 +183,7 @@ class TestQuantileGridExpansion:
 
         # Size: sufficient coverage
         assert len(critical_points) >= 10, (
-            f"Expected >=10 points in [0, 0.02], got {len(critical_points)}: "
-            f"{critical_points}"
+            f"Expected >=10 points in [0, 0.02], got {len(critical_points)}: {critical_points}"
         )
 
         # Property: spacing is reasonable
@@ -210,15 +206,9 @@ class TestQuantileGridExpansion:
         grid = np.array(config.quantile_grid)
 
         # Contents: bounds check
-        assert grid[0] <= 0.001, (
-            f"First quantile too large: {grid[0]} (should be <=0.001)"
-        )
-        assert grid[-1] >= 0.20, (
-            f"Last quantile too small: {grid[-1]} (should be >=0.20)"
-        )
-        assert grid[-1] <= 0.30, (
-            f"Last quantile too large: {grid[-1]} (should be <=0.30)"
-        )
+        assert grid[0] <= 0.001, f"First quantile too large: {grid[0]} (should be <=0.001)"
+        assert grid[-1] >= 0.20, f"Last quantile too small: {grid[-1]} (should be >=0.20)"
+        assert grid[-1] <= 0.30, f"Last quantile too large: {grid[-1]} (should be <=0.30)"
 
     def test_custom_grid_overrides_default(self):
         """User should be able to specify custom quantile grid.
@@ -271,9 +261,7 @@ class TestConfigurableThresholds:
         config = BoundaryConfig()
 
         # Value: default preserved
-        assert config.excess_ratio == 1.5, (
-            f"Expected default 1.5, got {config.excess_ratio}"
-        )
+        assert config.excess_ratio == 1.5, f"Expected default 1.5, got {config.excess_ratio}"
 
         # Type: float
         assert isinstance(config.excess_ratio, float)
@@ -305,7 +293,7 @@ class TestConfigurableThresholds:
         with pytest.raises(ValueError, match="excess_ratio"):
             BoundaryConfig(excess_ratio=0.5)
 
-    @patch('fitqc.boundary._compute_quantile_curves_boundary')
+    @patch("fitqc.boundary._compute_quantile_curves_boundary")
     def test_thresholds_passed_to_detection_logic(self, mock_compute):
         """Verify config thresholds are actually passed to detection functions.
 
@@ -326,26 +314,24 @@ class TestConfigurableThresholds:
 
         mock_compute.return_value = (
             mock_tol_values,  # tol_at_quantile (26 elements)
-            mock_elbows       # elbows_per_quantile (26 elements)
+            mock_elbows,  # elbows_per_quantile (26 elements)
         )
 
         # Create config with CUSTOM thresholds (different from defaults)
         custom_config = BoundaryConfig(
             use_quantile_analysis=True,
             pileup_threshold=0.008,  # Custom (default is 0.005)
-            excess_ratio=1.8         # Custom (default is 1.5)
+            excess_ratio=1.8,  # Custom (default is 1.5)
         )
 
         rng = np.random.default_rng(42)
         x = rng.uniform(0, 10, 1000)
 
         # Run detection
-        result = run_boundary_qc(x, L=0, U=10, config=custom_config)
+        _result = run_boundary_qc(x, L=0, U=10, config=custom_config)
 
         # Verify function was called (detection logic ran)
-        assert mock_compute.called, (
-            "Detection logic should be invoked with custom config"
-        )
+        assert mock_compute.called, "Detection logic should be invoked with custom config"
 
         # Verify config was actually passed (not None)
         # The function signature is: _compute_quantile_curves_boundary(u_sorted, tol_grid, quantile_grid)
@@ -360,9 +346,7 @@ class TestConfigurableThresholds:
 
         # Check that quantile_grid argument has expected size from config
         quantile_grid_arg = call_args[0][2]  # Third positional arg
-        assert len(quantile_grid_arg) > 0, (
-            "Quantile grid from config should be passed to detection"
-        )
+        assert len(quantile_grid_arg) > 0, "Quantile grid from config should be passed to detection"
 
         # Note: Direct threshold verification would require mocking the
         # detection decision logic, but this test verifies the config
@@ -383,7 +367,7 @@ class TestIterativeKneedleRefinement:
     - Elbow between adjacent points (main use case)
     """
 
-    @patch('fitqc.boundary.select_elbow')
+    @patch("fitqc.boundary.select_elbow")
     def test_iterative_refinement_calls_elbow_detection_multiple_times(self, mock_elbow):
         """Verify iterative refinement actually iterates (calls elbow detection >1 time).
 
@@ -398,23 +382,20 @@ class TestIterativeKneedleRefinement:
         # Configure mock to return different values on each call
         # This simulates elbow moving during refinement (convergence)
         mock_elbow.side_effect = [
-            0.02,    # First iteration: elbow at 2%
+            0.02,  # First iteration: elbow at 2%
             0.0195,  # Second iteration: elbow refined to 1.95%
-            0.0195   # Third iteration: converged (same value)
+            0.0195,  # Third iteration: converged (same value)
         ]
 
         rng = np.random.default_rng(42)
-        x = np.concatenate([
-            np.zeros(300),
-            rng.uniform(0, 100, 9700)
-        ])
+        x = np.concatenate([np.zeros(300), rng.uniform(0, 100, 9700)])
 
         config = BoundaryConfig(
             use_quantile_analysis=True,
-            refine_transition=True  # Enable iterative refinement
+            refine_transition=True,  # Enable iterative refinement
         )
 
-        result = run_boundary_qc(x, L=0, U=100, config=config)
+        _result = run_boundary_qc(x, L=0, U=100, config=config)
 
         # ========== NON-TRIVIAL VERIFICATION ==========
 
@@ -450,11 +431,9 @@ class TestIterativeKneedleRefinement:
             )
 
             # Verify grid is still sorted (sanity check)
-            assert np.all(np.diff(second_grid) > 0), (
-                "Refined grid must be strictly increasing"
-            )
+            assert np.all(np.diff(second_grid) > 0), "Refined grid must be strictly increasing"
 
-    @patch('fitqc.boundary.select_elbow')
+    @patch("fitqc.boundary.select_elbow")
     def test_refinement_handles_elbow_detection_returning_none(self, mock_elbow):
         """Verify refinement handles the case where elbow detection returns None.
 
@@ -472,21 +451,14 @@ class TestIterativeKneedleRefinement:
         rng = np.random.default_rng(42)
         x = rng.uniform(0, 100, 10000)  # Uniform data, no elbow
 
-        config = BoundaryConfig(
-            use_quantile_analysis=True,
-            refine_transition=True
-        )
+        config = BoundaryConfig(use_quantile_analysis=True, refine_transition=True)
 
         # Should NOT crash
         result = run_boundary_qc(x, L=0, U=100, config=config)
 
         # Verify result is sensible (no detection)
-        assert result.lower_pileup_detected is False, (
-            "Should not detect pileup when no elbow found"
-        )
-        assert result.t_lo_star is None, (
-            "t_lo_star should be None when no elbow found"
-        )
+        assert result.lower_pileup_detected is False, "Should not detect pileup when no elbow found"
+        assert result.t_lo_star is None, "t_lo_star should be None when no elbow found"
 
         # Verify we didn't try to refine around a None elbow
         # (should have stopped after first iteration)
@@ -496,7 +468,7 @@ class TestIterativeKneedleRefinement:
             f"Refinement should check for None before iterating."
         )
 
-    @patch('fitqc.boundary._compute_quantile_curves_boundary')
+    @patch("fitqc.boundary._compute_quantile_curves_boundary")
     def test_quantile_grid_actually_passed_to_detection(self, mock_compute):
         """Verify custom quantile_grid is actually used in detection logic.
 
@@ -511,26 +483,21 @@ class TestIterativeKneedleRefinement:
         # Configure mock to return typical values
         mock_compute.return_value = (
             np.array([0.001, 0.005, 0.01]),  # tol_at_quantile (matches custom grid size)
-            [0.015]  # elbows_per_quantile
+            [0.015],  # elbows_per_quantile
         )
 
         # Create config with CUSTOM grid (different from default)
         custom_grid = (0.001, 0.005, 0.01)  # Only 3 points (vs 26 default)
-        custom_config = BoundaryConfig(
-            use_quantile_analysis=True,
-            quantile_grid=custom_grid
-        )
+        custom_config = BoundaryConfig(use_quantile_analysis=True, quantile_grid=custom_grid)
 
         rng = np.random.default_rng(42)
         x = rng.uniform(0, 10, 1000)
 
         # Run detection
-        result = run_boundary_qc(x, L=0, U=10, config=custom_config)
+        _result = run_boundary_qc(x, L=0, U=10, config=custom_config)
 
         # Verify function was called
-        assert mock_compute.called, (
-            "Quantile curve computation should be invoked"
-        )
+        assert mock_compute.called, "Quantile curve computation should be invoked"
 
         # Verify the correct grid was passed
         # (This checks that config.quantile_grid was actually used)
@@ -549,7 +516,7 @@ class TestIterativeKneedleRefinement:
             passed_grid,
             np.array(custom_grid),
             decimal=6,
-            err_msg="Custom quantile_grid values don't match what was passed to detection"
+            err_msg="Custom quantile_grid values don't match what was passed to detection",
         )
 
     def test_refinement_increases_grid_size(self):
@@ -565,20 +532,19 @@ class TestIterativeKneedleRefinement:
         n = 10000
 
         # Generate data with clear lower boundary pileup
-        x = np.concatenate([
-            np.zeros(int(0.03 * n)),  # 3% at exact boundary
-            rng.uniform(0, 100, n - int(0.03 * n))
-        ])
+        x = np.concatenate(
+            [
+                np.zeros(int(0.03 * n)),  # 3% at exact boundary
+                rng.uniform(0, 100, n - int(0.03 * n)),
+            ]
+        )
 
         # Run with refinement enabled
-        config_refined = BoundaryConfig(
-            use_quantile_analysis=True,
-            refine_transition=True
-        )
+        config_refined = BoundaryConfig(use_quantile_analysis=True, refine_transition=True)
         result_refined = run_boundary_qc(x, L=0, U=100, config=config_refined)
 
         # Size: grid should have grown
-        assert hasattr(result_refined, 'quantile_grid_refined_lower'), (
+        assert hasattr(result_refined, "quantile_grid_refined_lower"), (
             "Result must expose refined grid for scientific validation"
         )
 
@@ -587,8 +553,7 @@ class TestIterativeKneedleRefinement:
             refined_grid_size = len(result_refined.quantile_grid_refined_lower)
 
             assert refined_grid_size > initial_grid_size, (
-                f"Grid should grow during refinement: "
-                f"{initial_grid_size} -> {refined_grid_size}"
+                f"Grid should grow during refinement: {initial_grid_size} -> {refined_grid_size}"
             )
 
     def test_refinement_improves_detection_on_ahe_pattern(self):
@@ -606,16 +571,10 @@ class TestIterativeKneedleRefinement:
         n = 100000
 
         # A_He pattern: 3% concentrated at exact lower boundary
-        x_ahe = np.concatenate([
-            np.zeros(int(0.03 * n)),
-            rng.uniform(0, 100, n - int(0.03 * n))
-        ])
+        x_ahe = np.concatenate([np.zeros(int(0.03 * n)), rng.uniform(0, 100, n - int(0.03 * n))])
 
         # With refinement (should succeed)
-        config_refine = BoundaryConfig(
-            use_quantile_analysis=True,
-            refine_transition=True
-        )
+        config_refine = BoundaryConfig(use_quantile_analysis=True, refine_transition=True)
         result_refine = run_boundary_qc(x_ahe, L=0, U=100, config=config_refine)
 
         # Behavior: refinement should detect
@@ -660,10 +619,7 @@ class TestIterativeKneedleRefinement:
         rng = np.random.default_rng(42)
         x_uniform = rng.uniform(0, 10, 10000)
 
-        config = BoundaryConfig(
-            use_quantile_analysis=True,
-            refine_transition=True
-        )
+        config = BoundaryConfig(use_quantile_analysis=True, refine_transition=True)
         result = run_boundary_qc(x_uniform, L=0, U=10, config=config)
 
         # Behavior: graceful handling
@@ -676,16 +632,10 @@ class TestIterativeKneedleRefinement:
         Safety test: ensures algorithm doesn't get stuck in infinite refinement.
         """
         rng = np.random.default_rng(42)
-        x = np.concatenate([
-            np.zeros(1000),
-            rng.uniform(0, 100, 9000)
-        ])
+        x = np.concatenate([np.zeros(1000), rng.uniform(0, 100, 9000)])
 
         # Run with refinement (should complete in reasonable time)
-        config = BoundaryConfig(
-            use_quantile_analysis=True,
-            refine_transition=True
-        )
+        config = BoundaryConfig(use_quantile_analysis=True, refine_transition=True)
 
         t0 = time.time()
         result = run_boundary_qc(x, L=0, U=100, config=config)
@@ -712,23 +662,23 @@ class TestIterativeKneedleRefinement:
         n = 10000
 
         # Extreme case: 5% at EXACT boundary (u=0), rest uniform
-        x = np.concatenate([
-            np.full(int(0.05 * n), 0.0),  # Exact boundary
-            rng.uniform(0, 100, n - int(0.05 * n))
-        ])
+        x = np.concatenate(
+            [
+                np.full(int(0.05 * n), 0.0),  # Exact boundary
+                rng.uniform(0, 100, n - int(0.05 * n)),
+            ]
+        )
 
         config = BoundaryConfig(
             use_quantile_analysis=True,
             refine_transition=True,
-            quantile_grid=(0.001, 0.01, 0.02, 0.05, 0.10, 0.25)
+            quantile_grid=(0.001, 0.01, 0.02, 0.05, 0.10, 0.25),
         )
 
         result = run_boundary_qc(x, L=0, U=100, config=config)
 
         # Behavior: should detect (mass is clearly at boundary)
-        assert result.lower_pileup_detected is True, (
-            "Exact boundary pileup must be detected"
-        )
+        assert result.lower_pileup_detected is True, "Exact boundary pileup must be detected"
 
         # Behavior: should not crash (graceful handling)
         assert result.t_lo_star is not None
@@ -739,7 +689,7 @@ class TestIterativeKneedleRefinement:
         )
 
         # Implementation detail: if we expose refined_grid
-        if hasattr(result, 'quantile_grid_refined_lower'):
+        if hasattr(result, "quantile_grid_refined_lower"):
             if result.quantile_grid_refined_lower is not None:
                 # Should not have infinite points (bounded growth)
                 assert len(result.quantile_grid_refined_lower) < 100, (
@@ -761,15 +711,17 @@ class TestIterativeKneedleRefinement:
 
         # Broad pileup: 20% of samples in first 15% of range
         pileup_samples = int(0.20 * n)
-        x = np.concatenate([
-            rng.uniform(0, 15, pileup_samples),  # Broad pileup
-            rng.uniform(0, 100, n - pileup_samples)
-        ])
+        x = np.concatenate(
+            [
+                rng.uniform(0, 15, pileup_samples),  # Broad pileup
+                rng.uniform(0, 100, n - pileup_samples),
+            ]
+        )
 
         config = BoundaryConfig(
             use_quantile_analysis=True,
             refine_transition=True,
-            quantile_grid=(0.001, 0.01, 0.05, 0.10, 0.15, 0.20)
+            quantile_grid=(0.001, 0.01, 0.05, 0.10, 0.15, 0.20),
         )
 
         result = run_boundary_qc(x, L=0, U=100, config=config)
@@ -799,18 +751,24 @@ class TestIterativeKneedleRefinement:
 
         # Precise pileup: exactly 1.5% at boundary
         pileup_frac = 0.015
-        x = np.concatenate([
-            np.zeros(int(pileup_frac * n)),  # Exact boundary
-            rng.uniform(0, 100, n - int(pileup_frac * n))
-        ])
+        x = np.concatenate(
+            [
+                np.zeros(int(pileup_frac * n)),  # Exact boundary
+                rng.uniform(0, 100, n - int(pileup_frac * n)),
+            ]
+        )
 
         # Initial grid straddles the true elbow
         config = BoundaryConfig(
             use_quantile_analysis=True,
             refine_transition=True,
             quantile_grid=(
-                0.001, 0.01, 0.02, 0.05, 0.10  # 1.5% is between 0.01 and 0.02
-            )
+                0.001,
+                0.01,
+                0.02,
+                0.05,
+                0.10,  # 1.5% is between 0.01 and 0.02
+            ),
         )
 
         result = run_boundary_qc(x, L=0, U=100, config=config)
@@ -830,16 +788,11 @@ class TestIterativeKneedleRefinement:
         )
 
         # Refined grid should have more points in the 1-2% region
-        if hasattr(result, 'quantile_grid_refined_lower'):
+        if hasattr(result, "quantile_grid_refined_lower"):
             if result.quantile_grid_refined_lower is not None:
                 refined_grid = result.quantile_grid_refined_lower
-                points_in_region = [
-                    q for q in refined_grid
-                    if 0.01 <= q <= 0.02
-                ]
-                assert len(points_in_region) > 2, (
-                    f"Should refine 1-2% region: {points_in_region}"
-                )
+                points_in_region = [q for q in refined_grid if 0.01 <= q <= 0.02]
+                assert len(points_in_region) > 2, f"Should refine 1-2% region: {points_in_region}"
 
 
 class TestFixesIntegration:
@@ -859,41 +812,31 @@ class TestFixesIntegration:
         rng = np.random.default_rng(42)
         x_uniform = rng.uniform(0, 100, 100000)
 
-        config = BoundaryConfig(
-            use_quantile_analysis=True,
-            refine_transition=True
-        )
+        config = BoundaryConfig(use_quantile_analysis=True, refine_transition=True)
         result = run_boundary_qc(x_uniform, L=0, U=100, config=config)
 
         # Behavior: should NOT detect pileup
-        assert result.lower_pileup_detected is False, (
-            "False positive on uniform data!"
-        )
-        assert result.upper_pileup_detected is False, (
-            "False positive on uniform data!"
-        )
+        assert result.lower_pileup_detected is False, "False positive on uniform data!"
+        assert result.upper_pileup_detected is False, "False positive on uniform data!"
 
     def test_moderate_pileup_detected(self):
         """5% pileup in 1% of range should be detected reliably."""
         rng = np.random.default_rng(42)
         n = 50000
-        x = np.concatenate([
-            rng.uniform(0, 1, int(0.05 * n)),  # 5% in first 1% of range
-            rng.uniform(0, 100, n - int(0.05 * n))
-        ])
-
-        config = BoundaryConfig(
-            use_quantile_analysis=True,
-            refine_transition=True
+        x = np.concatenate(
+            [
+                rng.uniform(0, 1, int(0.05 * n)),  # 5% in first 1% of range
+                rng.uniform(0, 100, n - int(0.05 * n)),
+            ]
         )
+
+        config = BoundaryConfig(use_quantile_analysis=True, refine_transition=True)
         result = run_boundary_qc(x, L=0, U=100, config=config)
 
         # Behavior: should detect
         assert result.lower_pileup_detected is True
         assert result.t_lo_star is not None
-        assert 0.005 < result.t_lo_star < 0.02, (
-            f"Expected tolerance ~1%, got {result.t_lo_star}"
-        )
+        assert 0.005 < result.t_lo_star < 0.02, f"Expected tolerance ~1%, got {result.t_lo_star}"
 
     def test_asymmetric_detection_lower_only(self):
         """Lower pileup detected, upper not detected (asymmetric).
@@ -906,24 +849,19 @@ class TestFixesIntegration:
         """
         rng = np.random.default_rng(42)
         n = 50000
-        x = np.concatenate([
-            rng.uniform(0, 0.5, int(0.05 * n)),  # Lower pileup only
-            rng.uniform(0, 100, n - int(0.05 * n))
-        ])
-
-        config = BoundaryConfig(
-            use_quantile_analysis=True,
-            refine_transition=True
+        x = np.concatenate(
+            [
+                rng.uniform(0, 0.5, int(0.05 * n)),  # Lower pileup only
+                rng.uniform(0, 100, n - int(0.05 * n)),
+            ]
         )
+
+        config = BoundaryConfig(use_quantile_analysis=True, refine_transition=True)
         result = run_boundary_qc(x, L=0, U=100, config=config)
 
         # Behavior: asymmetric detection
-        assert result.lower_pileup_detected is True, (
-            "Lower pileup should be detected"
-        )
-        assert result.upper_pileup_detected is False, (
-            "Upper pileup should NOT be detected"
-        )
+        assert result.lower_pileup_detected is True, "Lower pileup should be detected"
+        assert result.upper_pileup_detected is False, "Upper pileup should NOT be detected"
 
         # Contents: only lower tolerance should be significant
         assert result.t_lo_star is not None
@@ -945,24 +883,19 @@ class TestFixesIntegration:
         """
         rng = np.random.default_rng(42)
         n = 50000
-        x = np.concatenate([
-            rng.uniform(99.5, 100, int(0.05 * n)),  # Upper pileup only
-            rng.uniform(0, 100, n - int(0.05 * n))
-        ])
-
-        config = BoundaryConfig(
-            use_quantile_analysis=True,
-            refine_transition=True
+        x = np.concatenate(
+            [
+                rng.uniform(99.5, 100, int(0.05 * n)),  # Upper pileup only
+                rng.uniform(0, 100, n - int(0.05 * n)),
+            ]
         )
+
+        config = BoundaryConfig(use_quantile_analysis=True, refine_transition=True)
         result = run_boundary_qc(x, L=0, U=100, config=config)
 
         # Behavior: asymmetric detection (upper only)
-        assert result.upper_pileup_detected is True, (
-            "Upper pileup should be detected"
-        )
-        assert result.lower_pileup_detected is False, (
-            "Lower pileup should NOT be detected"
-        )
+        assert result.upper_pileup_detected is True, "Upper pileup should be detected"
+        assert result.lower_pileup_detected is False, "Lower pileup should NOT be detected"
 
         # Contents: only upper tolerance should be significant
         assert result.t_hi_star is not None
@@ -984,25 +917,20 @@ class TestFixesIntegration:
         """
         rng = np.random.default_rng(42)
         n = 50000
-        x = np.concatenate([
-            rng.uniform(0, 0.5, int(0.04 * n)),      # Lower pileup
-            rng.uniform(99.5, 100, int(0.04 * n)),   # Upper pileup
-            rng.uniform(0, 100, n - int(0.08 * n))
-        ])
-
-        config = BoundaryConfig(
-            use_quantile_analysis=True,
-            refine_transition=True
+        x = np.concatenate(
+            [
+                rng.uniform(0, 0.5, int(0.04 * n)),  # Lower pileup
+                rng.uniform(99.5, 100, int(0.04 * n)),  # Upper pileup
+                rng.uniform(0, 100, n - int(0.08 * n)),
+            ]
         )
+
+        config = BoundaryConfig(use_quantile_analysis=True, refine_transition=True)
         result = run_boundary_qc(x, L=0, U=100, config=config)
 
         # Behavior: both detected
-        assert result.lower_pileup_detected is True, (
-            "Lower boundary pileup should be detected"
-        )
-        assert result.upper_pileup_detected is True, (
-            "Upper boundary pileup should be detected"
-        )
+        assert result.lower_pileup_detected is True, "Lower boundary pileup should be detected"
+        assert result.upper_pileup_detected is True, "Upper boundary pileup should be detected"
 
         # Contents: both tolerances significant
         assert result.t_lo_star is not None
@@ -1027,7 +955,7 @@ class TestFixesIntegration:
         config_baseline = BoundaryConfig(
             use_quantile_analysis=True,
             quantile_grid=(0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.10),
-            refine_transition=False
+            refine_transition=False,
         )
 
         t0 = time.time()
@@ -1035,10 +963,7 @@ class TestFixesIntegration:
         baseline_time = time.time() - t0
 
         # New: 26-point grid, with refinement
-        config_new = BoundaryConfig(
-            use_quantile_analysis=True,
-            refine_transition=True
-        )
+        config_new = BoundaryConfig(use_quantile_analysis=True, refine_transition=True)
 
         t0 = time.time()
         run_boundary_qc(x, L=0, U=100, config=config_new)
@@ -1047,7 +972,7 @@ class TestFixesIntegration:
         # Accept up to 5x slowdown (generous bound)
         assert new_time < baseline_time * 5.0, (
             f"Unacceptable slowdown: {baseline_time:.3f}s -> {new_time:.3f}s "
-            f"({new_time/baseline_time:.1f}x)"
+            f"({new_time / baseline_time:.1f}x)"
         )
 
 
@@ -1101,15 +1026,14 @@ class TestFineGrainedBoundaryDetection:
         # 1% stuck exactly at lower boundary
         # Real PPA12 data (A_He) shows boundary stickiness is a delta function
         # at the exact boundary (L=0), not spread over a bin width
-        x = np.concatenate([
-            np.zeros(int(0.01 * n)),  # 1000 samples exactly at L=0
-            rng.uniform(0, 100, int(0.99 * n))  # 99000 uniform
-        ])
-
-        config = BoundaryConfig(
-            use_quantile_analysis=True,
-            refine_transition=True
+        x = np.concatenate(
+            [
+                np.zeros(int(0.01 * n)),  # 1000 samples exactly at L=0
+                rng.uniform(0, 100, int(0.99 * n)),  # 99000 uniform
+            ]
         )
+
+        config = BoundaryConfig(use_quantile_analysis=True, refine_transition=True)
         result = run_boundary_qc(x, L=0, U=100, config=config)
 
         # Assertion 1: Detection (critical smoke test)
@@ -1121,9 +1045,7 @@ class TestFineGrainedBoundaryDetection:
         )
 
         # Assertion 2: Type and existence checks
-        assert result.t_lo_star is not None, (
-            "t_lo_star should not be None when pileup detected"
-        )
+        assert result.t_lo_star is not None, "t_lo_star should not be None when pileup detected"
         assert isinstance(result.t_lo_star, float), (
             f"t_lo_star must be float, got {type(result.t_lo_star)}"
         )
@@ -1156,16 +1078,15 @@ class TestFineGrainedBoundaryDetection:
 
         # Assertion 6: Quantile compression validation (validates internals)
         if result.quantile_elbows is not None:
-            assert 'lower' in result.quantile_elbows, (
+            assert "lower" in result.quantile_elbows, (
                 "quantile_elbows must contain 'lower' key for lower boundary analysis"
             )
-            lower_elbows = result.quantile_elbows['lower']
+            lower_elbows = result.quantile_elbows["lower"]
 
             # Check for compression at low quantiles
             # For 1% pileup, we expect tol/q < 1 for q < 0.02
             low_q_ratios = [
-                tol / q for q, tol in lower_elbows.items()
-                if q < 0.02 and tol is not None and q > 0
+                tol / q for q, tol in lower_elbows.items() if q < 0.02 and tol is not None and q > 0
             ]
             if low_q_ratios:
                 median_ratio = np.median(low_q_ratios)
@@ -1223,15 +1144,14 @@ class TestFineGrainedBoundaryDetection:
         # For 1000-bin histogram of [0, 100], bin_width = 0.1
         # Realistic stickiness: spread over [U - bin_width, U] = [99.9, 100]
         bin_width = 0.1
-        x = np.concatenate([
-            rng.uniform(100 - bin_width, 100, int(0.01 * n)),  # 1000 samples in [99.9, 100]
-            rng.uniform(0, 100, int(0.99 * n))
-        ])
-
-        config = BoundaryConfig(
-            use_quantile_analysis=True,
-            refine_transition=True
+        x = np.concatenate(
+            [
+                rng.uniform(100 - bin_width, 100, int(0.01 * n)),  # 1000 samples in [99.9, 100]
+                rng.uniform(0, 100, int(0.99 * n)),
+            ]
         )
+
+        config = BoundaryConfig(use_quantile_analysis=True, refine_transition=True)
         result = run_boundary_qc(x, L=0, U=100, config=config)
 
         # Assertion 1: Detection
@@ -1264,10 +1184,8 @@ class TestFineGrainedBoundaryDetection:
 
         # Assertion 5: Quantile elbows structure
         if result.quantile_elbows is not None:
-            assert 'upper' in result.quantile_elbows, (
-                "quantile_elbows must contain 'upper' key"
-            )
-            upper_elbows = result.quantile_elbows['upper']
+            assert "upper" in result.quantile_elbows, "quantile_elbows must contain 'upper' key"
+            upper_elbows = result.quantile_elbows["upper"]
             assert isinstance(upper_elbows, dict), (
                 f"Upper elbows must be dict, got {type(upper_elbows)}"
             )
@@ -1322,16 +1240,15 @@ class TestFineGrainedBoundaryDetection:
 
         # 1% at L=0 AND 1% at U=100 simultaneously
         # Delta functions at exact boundaries (like real PPA12 data)
-        x = np.concatenate([
-            np.zeros(int(0.01 * n)),              # 1000 exactly at L=0
-            np.full(int(0.01 * n), 100),          # 1000 exactly at U=100
-            rng.uniform(0, 100, int(0.98 * n))  # 98000 uniform
-        ])
-
-        config = BoundaryConfig(
-            use_quantile_analysis=True,
-            refine_transition=True
+        x = np.concatenate(
+            [
+                np.zeros(int(0.01 * n)),  # 1000 exactly at L=0
+                np.full(int(0.01 * n), 100),  # 1000 exactly at U=100
+                rng.uniform(0, 100, int(0.98 * n)),  # 98000 uniform
+            ]
         )
+
+        config = BoundaryConfig(use_quantile_analysis=True, refine_transition=True)
         result = run_boundary_qc(x, L=0, U=100, config=config)
 
         # Assertion 1: Both boundaries detected
@@ -1367,40 +1284,34 @@ class TestFineGrainedBoundaryDetection:
 
         # Assertion 5: Quantile elbows for both boundaries
         if result.quantile_elbows is not None:
-            assert 'lower' in result.quantile_elbows, "Missing lower quantile elbows"
-            assert 'upper' in result.quantile_elbows, "Missing upper quantile elbows"
+            assert "lower" in result.quantile_elbows, "Missing lower quantile elbows"
+            assert "upper" in result.quantile_elbows, "Missing upper quantile elbows"
 
-            lower_elbows = result.quantile_elbows['lower']
-            upper_elbows = result.quantile_elbows['upper']
+            lower_elbows = result.quantile_elbows["lower"]
+            upper_elbows = result.quantile_elbows["upper"]
 
             # Both should have some valid elbows
             lower_valid = sum(1 for v in lower_elbows.values() if v is not None)
             upper_valid = sum(1 for v in upper_elbows.values() if v is not None)
 
             assert lower_valid > 0, (
-                f"No valid lower elbows found in bilateral case. "
-                f"Lower elbows: {lower_elbows}"
+                f"No valid lower elbows found in bilateral case. Lower elbows: {lower_elbows}"
             )
             assert upper_valid > 0, (
-                f"No valid upper elbows found in bilateral case. "
-                f"Upper elbows: {upper_elbows}"
+                f"No valid upper elbows found in bilateral case. Upper elbows: {upper_elbows}"
             )
 
         # Assertion 6: Mass curves show elbows
         # Lower mass should rise quickly then plateau
         lower_early = result.lower_mass_curve[:5].mean()
         lower_late = result.lower_mass_curve[-5:].mean()
-        assert lower_early > 0.005, (
-            f"Lower mass curve shows no early rise: {lower_early:.6f}"
-        )
-        assert lower_late > lower_early, (
-            "Lower mass curve should be monotonic increasing"
-        )
+        assert lower_early > 0.005, f"Lower mass curve shows no early rise: {lower_early:.6f}"
+        assert lower_late > lower_early, "Lower mass curve should be monotonic increasing"
 
         # Assertion 7: Result structure completeness
-        assert hasattr(result, 'tol_grid')
-        assert hasattr(result, 'lower_mass_curve')
-        assert hasattr(result, 'upper_mass_curve')
+        assert hasattr(result, "tol_grid")
+        assert hasattr(result, "lower_mass_curve")
+        assert hasattr(result, "upper_mass_curve")
 
     def test_sub_percent_pileup_lower_boundary(self):
         """Detect 0.5% pileup concentrated in 0.1% tolerance range at lower boundary.
@@ -1437,16 +1348,18 @@ class TestFineGrainedBoundaryDetection:
 
         # 0.5% (500 samples) concentrated in [0, 0.1] range
         pileup_samples = int(0.005 * n)
-        x = np.concatenate([
-            rng.uniform(0, 0.1, pileup_samples),  # 0.5% in first 0.1% of range
-            rng.uniform(0, 100, n - pileup_samples)
-        ])
+        x = np.concatenate(
+            [
+                rng.uniform(0, 0.1, pileup_samples),  # 0.5% in first 0.1% of range
+                rng.uniform(0, 100, n - pileup_samples),
+            ]
+        )
 
         config = BoundaryConfig(
             use_quantile_analysis=True,
             refine_transition=True,
             # Ensure fine quantile grid
-            pileup_threshold=0.002  # Lower threshold for sub-percent detection
+            pileup_threshold=0.002,  # Lower threshold for sub-percent detection
         )
         result = run_boundary_qc(x, L=0, U=100, config=config)
 
@@ -1534,15 +1447,15 @@ class TestFineGrainedBoundaryDetection:
 
         # 0.5% (500 samples) concentrated in [99.9, 100] range
         pileup_samples = int(0.005 * n)
-        x = np.concatenate([
-            rng.uniform(99.9, 100, pileup_samples),  # 0.5% in last 0.1% of range
-            rng.uniform(0, 100, n - pileup_samples)
-        ])
+        x = np.concatenate(
+            [
+                rng.uniform(99.9, 100, pileup_samples),  # 0.5% in last 0.1% of range
+                rng.uniform(0, 100, n - pileup_samples),
+            ]
+        )
 
         config = BoundaryConfig(
-            use_quantile_analysis=True,
-            refine_transition=True,
-            pileup_threshold=0.002
+            use_quantile_analysis=True, refine_transition=True, pileup_threshold=0.002
         )
         result = run_boundary_qc(x, L=0, U=100, config=config)
 
@@ -1585,8 +1498,8 @@ class TestFineGrainedBoundaryDetection:
         )
 
         # Assertion 7: Result completeness
-        assert hasattr(result, 'tol_grid')
-        assert hasattr(result, 'upper_mass_curve')
+        assert hasattr(result, "tol_grid")
+        assert hasattr(result, "upper_mass_curve")
         assert result.tol_grid.ndim == 1
 
     def test_quantile_grid_resolution_for_fine_pileups(self):
@@ -1711,23 +1624,15 @@ class TestFineGrainedBoundaryDetection:
         n = 50000
 
         # Create test data with known 2% pileup
-        x = np.concatenate([
-            np.zeros(int(0.02 * n)),
-            rng.uniform(0, 100, int(0.98 * n))
-        ])
+        x = np.concatenate([np.zeros(int(0.02 * n)), rng.uniform(0, 100, int(0.98 * n))])
 
-        config = BoundaryConfig(
-            use_quantile_analysis=True,
-            refine_transition=True
-        )
+        config = BoundaryConfig(use_quantile_analysis=True, refine_transition=True)
         result = run_boundary_qc(x, L=0, U=100, config=config)
 
         # Assertion 1: Tolerance grid exists and is valid
-        assert hasattr(result, 'tol_grid'), "Result must contain tol_grid"
+        assert hasattr(result, "tol_grid"), "Result must contain tol_grid"
         assert isinstance(result.tol_grid, np.ndarray)
-        assert result.tol_grid.ndim == 1, (
-            f"tol_grid must be 1D, got shape {result.tol_grid.shape}"
-        )
+        assert result.tol_grid.ndim == 1, f"tol_grid must be 1D, got shape {result.tol_grid.shape}"
 
         # Assertion 2: Grid is non-empty and reasonable size
         # Default config uses 41 points (0 to 0.05 with 0.00125 spacing)
@@ -1759,9 +1664,7 @@ class TestFineGrainedBoundaryDetection:
             )
 
         # Assertion 5: Coverage of expected range
-        assert result.tol_grid[0] >= 0, (
-            f"tol_grid minimum {result.tol_grid[0]:.6f} should be >= 0"
-        )
+        assert result.tol_grid[0] >= 0, f"tol_grid minimum {result.tol_grid[0]:.6f} should be >= 0"
         assert result.tol_grid[-1] >= 0.10, (
             f"tol_grid maximum {result.tol_grid[-1]:.6f} should extend to >= 0.10 "
             f"to capture moderate pileups"
@@ -1834,15 +1737,14 @@ class TestInitialGuessStickiness:
         n = 100000
 
         # 2% stuck at exactly x=50 (mid-range, not boundary)
-        x = np.concatenate([
-            np.full(int(0.02 * n), 50.0),  # 2000 samples at interior point
-            rng.uniform(0, 100, int(0.98 * n))
-        ])
-
-        config = BoundaryConfig(
-            use_quantile_analysis=True,
-            refine_transition=True
+        x = np.concatenate(
+            [
+                np.full(int(0.02 * n), 50.0),  # 2000 samples at interior point
+                rng.uniform(0, 100, int(0.98 * n)),
+            ]
         )
+
+        config = BoundaryConfig(use_quantile_analysis=True, refine_transition=True)
         result = run_boundary_qc(x, L=0, U=100, config=config)
 
         # Assertion 1: Lower boundary NOT detected (expected)
@@ -1876,8 +1778,8 @@ class TestInitialGuessStickiness:
         # Check that mass curve doesn't show boundary elbow
         if len(result.lower_mass_curve) > 10:
             # First 10% of tolerance range should have ~10% of mass (linear)
-            early_tol = result.tol_grid[len(result.tol_grid)//10]
-            early_mass = result.lower_mass_curve[len(result.lower_mass_curve)//10]
+            early_tol = result.tol_grid[len(result.tol_grid) // 10]
+            early_mass = result.lower_mass_curve[len(result.lower_mass_curve) // 10]
 
             # For uniform, P(u < 0.1*tol_max) ≈ 0.1*tol_max
             # Allow 2x deviation (not strict, just checking not 10x)
@@ -1902,7 +1804,7 @@ class TestInitialGuessStickiness:
 
         # Assertion 7: Quantile elbows should show no strong signal
         if result.quantile_elbows is not None:
-            lower_elbows = result.quantile_elbows.get('lower', {})
+            lower_elbows = result.quantile_elbows.get("lower", {})
             # Count how many elbows were actually found
             found_elbows = sum(1 for v in lower_elbows.values() if v is not None and v > 0.005)
             assert found_elbows < len(lower_elbows) * 0.5, (
@@ -1942,35 +1844,31 @@ class TestInitialGuessStickiness:
 
         # 1% in 0.1% range centered at x=50 (interior, not boundary)
         pileup_samples = int(0.01 * n)
-        x = np.concatenate([
-            rng.uniform(49.95, 50.05, pileup_samples),  # 1% in 0.1 range at x=50
-            rng.uniform(0, 100, n - pileup_samples)
-        ])
-
-        config = BoundaryConfig(
-            use_quantile_analysis=True,
-            refine_transition=True
+        x = np.concatenate(
+            [
+                rng.uniform(49.95, 50.05, pileup_samples),  # 1% in 0.1 range at x=50
+                rng.uniform(0, 100, n - pileup_samples),
+            ]
         )
+
+        config = BoundaryConfig(use_quantile_analysis=True, refine_transition=True)
         result = run_boundary_qc(x, L=0, U=100, config=config)
 
         # Assertion 1: No lower boundary detection
         assert result.lower_pileup_detected is False, (
-            "Interior pileup should not trigger lower boundary detection. "
-            f"x=50 is far from L=0."
+            "Interior pileup should not trigger lower boundary detection. x=50 is far from L=0."
         )
 
         # Assertion 2: No upper boundary detection
         assert result.upper_pileup_detected is False, (
-            "Interior pileup should not trigger upper boundary detection. "
-            f"x=50 is far from U=100."
+            "Interior pileup should not trigger upper boundary detection. x=50 is far from U=100."
         )
 
         # Assertion 3: Comparison to boundary case
         # Create identical pileup at boundary for comparison
-        x_boundary = np.concatenate([
-            rng.uniform(0, 0.1, pileup_samples),
-            rng.uniform(0, 100, n - pileup_samples)
-        ])
+        x_boundary = np.concatenate(
+            [rng.uniform(0, 0.1, pileup_samples), rng.uniform(0, 100, n - pileup_samples)]
+        )
         result_boundary = run_boundary_qc(x_boundary, L=0, U=100, config=config)
 
         # The boundary case SHOULD detect
@@ -2003,8 +1901,7 @@ class TestInitialGuessStickiness:
         # Interior pileup mass curve should be more linear than boundary
         lower_curve_linearity = np.corrcoef(result.tol_grid, result.lower_mass_curve)[0, 1]
         boundary_curve_linearity = np.corrcoef(
-            result_boundary.tol_grid,
-            result_boundary.lower_mass_curve
+            result_boundary.tol_grid, result_boundary.lower_mass_curve
         )[0, 1]
 
         # Interior should be more linear (higher correlation)
@@ -2071,15 +1968,14 @@ class TestBoundaryArtifactHandling:
         pileup_width = 0.20
 
         pileup_samples = int(pileup_frac * n)
-        x = np.concatenate([
-            rng.uniform(0, pileup_width * 100, pileup_samples),  # 15% in [0, 20]
-            rng.uniform(0, 100, n - pileup_samples)
-        ])
-
-        config = BoundaryConfig(
-            use_quantile_analysis=True,
-            refine_transition=True
+        x = np.concatenate(
+            [
+                rng.uniform(0, pileup_width * 100, pileup_samples),  # 15% in [0, 20]
+                rng.uniform(0, 100, n - pileup_samples),
+            ]
         )
+
+        config = BoundaryConfig(use_quantile_analysis=True, refine_transition=True)
         result = run_boundary_qc(x, L=0, U=100, config=config)
 
         # Assertion 1: Detection should succeed
@@ -2123,7 +2019,7 @@ class TestBoundaryArtifactHandling:
             )
 
         # Assertion 6: Result structure
-        assert hasattr(result, 'tol_grid')
+        assert hasattr(result, "tol_grid")
         assert len(result.tol_grid) > 0
 
         # Assertion 7: Upper boundary independence
@@ -2166,10 +2062,7 @@ class TestBoundaryArtifactHandling:
         # True uniform data - no pileup anywhere
         x = rng.uniform(0, 100, n)
 
-        config = BoundaryConfig(
-            use_quantile_analysis=True,
-            refine_transition=True
-        )
+        config = BoundaryConfig(use_quantile_analysis=True, refine_transition=True)
         result = run_boundary_qc(x, L=0, U=100, config=config)
 
         # Assertion 1: No lower boundary detection
@@ -2217,8 +2110,8 @@ class TestBoundaryArtifactHandling:
 
         # Assertion 5: Quantile elbows should be mostly None
         if result.quantile_elbows is not None:
-            lower_elbows = result.quantile_elbows.get('lower', {})
-            upper_elbows = result.quantile_elbows.get('upper', {})
+            lower_elbows = result.quantile_elbows.get("lower", {})
+            upper_elbows = result.quantile_elbows.get("upper", {})
 
             # Count non-None elbows
             lower_found = sum(1 for v in lower_elbows.values() if v is not None and v > 0.005)
@@ -2253,10 +2146,13 @@ class TestBoundaryArtifactHandling:
         assert isinstance(result.upper_mass_curve, np.ndarray)
 
 
-@pytest.mark.parametrize("dtype,dtype_name", [
-    (np.float32, "float32"),
-    (np.float64, "float64"),
-])
+@pytest.mark.parametrize(
+    "dtype,dtype_name",
+    [
+        (np.float32, "float32"),
+        (np.float64, "float64"),
+    ],
+)
 class TestFloatPrecisionBoundaryDetection:
     """Tests for float32/float64 precision effects on boundary detection.
 
@@ -2314,18 +2210,17 @@ class TestFloatPrecisionBoundaryDetection:
         # Create realistic boundary pileup: delta function at exact boundary
         # Real PPA12 data (A_He) shows boundary stickiness as exact values at L=0
         pileup_samples = int(0.01 * n)
-        x = np.concatenate([
-            np.zeros(pileup_samples),  # 1000 samples exactly at L=0
-            rng.uniform(0, 100, n - pileup_samples)
-        ])
+        x = np.concatenate(
+            [
+                np.zeros(pileup_samples),  # 1000 samples exactly at L=0
+                rng.uniform(0, 100, n - pileup_samples),
+            ]
+        )
 
         # Convert to target precision
         x = x.astype(dtype)
 
-        config = BoundaryConfig(
-            use_quantile_analysis=True,
-            refine_transition=True
-        )
+        config = BoundaryConfig(use_quantile_analysis=True, refine_transition=True)
         result = run_boundary_qc(x, L=0, U=100, config=config)
 
         # Assertion 1: Detection should succeed at this precision
@@ -2346,14 +2241,10 @@ class TestFloatPrecisionBoundaryDetection:
         )
 
         # Assertion 3: Upper boundary should be clean
-        assert result.upper_pileup_detected is False, (
-            "Upper boundary should not show pileup"
-        )
+        assert result.upper_pileup_detected is False, "Upper boundary should not show pileup"
 
         # Assertion 4: Data type preserved
-        assert x.dtype == dtype, (
-            f"Test data should remain {dtype_name} throughout"
-        )
+        assert x.dtype == dtype, f"Test data should remain {dtype_name} throughout"
 
         # Assertion 5: Pileup at exact boundary
         # Verify the pileup is actually at L=0 (delta function)
@@ -2392,18 +2283,17 @@ class TestFloatPrecisionBoundaryDetection:
 
         # Create interior pileup: 2% at x=50 (mid-range)
         pileup_samples = int(0.02 * n)
-        x = np.concatenate([
-            np.full(pileup_samples, 50.0),  # At x0=50
-            rng.uniform(0, 100, n - pileup_samples)
-        ])
+        x = np.concatenate(
+            [
+                np.full(pileup_samples, 50.0),  # At x0=50
+                rng.uniform(0, 100, n - pileup_samples),
+            ]
+        )
 
         # Convert to target precision
         x = x.astype(dtype)
 
-        config = BoundaryConfig(
-            use_quantile_analysis=True,
-            refine_transition=True
-        )
+        config = BoundaryConfig(use_quantile_analysis=True, refine_transition=True)
         result = run_boundary_qc(x, L=0, U=100, config=config)
 
         # Assertion 1: No lower boundary detection (expected)

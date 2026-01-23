@@ -6,21 +6,29 @@ now including the new zoom panel that shows out-of-bounds detail when applicable
 """
 
 import json
+from pathlib import Path
+
 import numpy as np
 import pyarrow.parquet as pq
-from pathlib import Path
+
 from fitqc import plot_bounds_filter_comparison
 
 # All 12 PPA12 test datasets
 ALL_DATASETS = [
     "A_He",
-    "e_dv_pp", "e_dv_pp_2",
-    "e_dv_ap", "e_dv_ap_2",
-    "np1", "np2",
+    "e_dv_pp",
+    "e_dv_pp_2",
+    "e_dv_ap",
+    "e_dv_ap_2",
+    "np1",
+    "np2",
     "w_const",
-    "xi_1", "xi_2",
-    "u_1", "u_2",
+    "xi_1",
+    "xi_2",
+    "u_1",
+    "u_2",
 ]
+
 
 def regenerate_dataset_plots(dataset_name: str):
     """Regenerate bounds filter comparison plots for a dataset."""
@@ -39,7 +47,7 @@ def regenerate_dataset_plots(dataset_name: str):
 
         L = metadata["L"]
         U = metadata["U"]
-        name = metadata["name"]
+        _name = metadata["name"]
 
     except FileNotFoundError as e:
         print(f"  SKIP: {e}")
@@ -51,7 +59,7 @@ def regenerate_dataset_plots(dataset_name: str):
     n_total = len(x)
 
     print(f"  L={L}, U={U}, samples={n_total:,}")
-    print(f"  Out-of-bounds: {n_below + n_above:,} ({(n_below + n_above)/n_total:.2%})")
+    print(f"  Out-of-bounds: {n_below + n_above:,} ({(n_below + n_above) / n_total:.2%})")
 
     # Determine appropriate number of bins based on dataset
     range_width = U - L
@@ -62,7 +70,7 @@ def regenerate_dataset_plots(dataset_name: str):
     elif range_width > 10:
         bins = 200  # Smaller range (e.g., A_He: 0 to 25)
     else:
-        bins = 'auto'  # Very small range or complex distribution
+        bins = "auto"  # Very small range or complex distribution
 
     # Determine dataset family for subdirectory
     if dataset_name.startswith("e_dv_pp"):
@@ -89,16 +97,18 @@ def regenerate_dataset_plots(dataset_name: str):
     print(f"  Saved: {output_file_hires}")
 
     import matplotlib.pyplot as plt
+
     plt.close(fig)
 
     print()
     return True
 
+
 def main():
     """Regenerate all bounds filter comparison plots."""
-    print("="*70)
+    print("=" * 70)
     print("Regenerating Bounds Filter Comparison Plots with Zoom Panels")
-    print("="*70)
+    print("=" * 70)
     print()
 
     success_count = 0
@@ -106,9 +116,10 @@ def main():
         if regenerate_dataset_plots(dataset_name):
             success_count += 1
 
-    print("="*70)
+    print("=" * 70)
     print(f"✓ Successfully regenerated plots for {success_count}/{len(ALL_DATASETS)} datasets")
-    print("="*70)
+    print("=" * 70)
+
 
 if __name__ == "__main__":
     main()

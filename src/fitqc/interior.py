@@ -278,14 +278,14 @@ def run_interior_qc(
     - Better mental model: This detects "x0 stickiness" or "initial guess stickiness"
 
     The detection works by:
-    1. Normalizing distances from x0: z = |x - x0| / (U - L)
+    1. Normalizing distances from x0: ``z = |x - x0| / (U - L)``
     2. Building histogram of z-values to detect narrow spike at z ≈ 0
     3. Using scipy.signal.find_peaks to locate spike
     4. Using elbow detection on mass curve to find threshold
     5. Returning detection threshold eps_star
 
     The threshold can be used to filter x0-sticky samples:
-    - Filter: keep samples with |x - x0| / (U - L) > eps_star
+    - Filter: keep samples with ``|x - x0| / (U - L) > eps_star``
 
     Args:
         x: Array of fitted parameter values.

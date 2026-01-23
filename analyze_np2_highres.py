@@ -1,9 +1,10 @@
 """High-resolution np2 analysis with ~1000 histogram bins."""
 
 import json
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-from pathlib import Path
 
 # Load np2 data
 data_dir = Path("tests/data")
@@ -26,7 +27,7 @@ print(f"Samples: {len(x):,}")
 valid_mask = (x >= L) & (x <= U)
 x_valid = x[valid_mask]
 n_oob = len(x) - len(x_valid)
-print(f"Out-of-bounds: {n_oob} samples ({n_oob/len(x)*100:.2f}%)")
+print(f"Out-of-bounds: {n_oob} samples ({n_oob / len(x) * 100:.2f}%)")
 
 print("\n" + "=" * 100)
 print("RAW DATA DISTRIBUTION - HIGH RESOLUTION (1000 bins)")
@@ -37,8 +38,8 @@ bins_raw = np.linspace(L, U, 1001)
 hist_raw, edges = np.histogram(x_valid, bins=bins_raw)
 max_count = hist_raw.max()
 
-print(f"\nHistogram: {len(bins_raw)-1} bins from {L} to {U}")
-print(f"Bin width: {(U-L)/1000:.4f}")
+print(f"\nHistogram: {len(bins_raw) - 1} bins from {L} to {U}")
+print(f"Bin width: {(U - L) / 1000:.4f}")
 print(f"Max count in any bin: {max_count}")
 print()
 print("Showing first 100 bins (near lower boundary):")
@@ -46,11 +47,11 @@ print()
 
 for i in range(100):
     bin_left = edges[i]
-    bin_right = edges[i+1]
+    bin_right = edges[i + 1]
     count = hist_raw[i]
     pct = 100 * count / len(x_valid)
     bar_len = int(60 * count / max_count) if max_count > 0 else 0
-    bar = '#' * bar_len
+    bar = "#" * bar_len
 
     # Highlight bins with significant concentration
     if count > 100:
@@ -71,8 +72,8 @@ bins_u = np.linspace(0, 1, 1001)
 hist_u, edges_u = np.histogram(u, bins=bins_u)
 max_count_u = hist_u.max()
 
-print(f"\nHistogram: {len(bins_u)-1} bins from 0 to 1")
-print(f"Bin width: {1/1000:.6f}")
+print(f"\nHistogram: {len(bins_u) - 1} bins from 0 to 1")
+print(f"Bin width: {1 / 1000:.6f}")
 print(f"Max count: {max_count_u}")
 print()
 print("Showing first 100 bins (u=0 to u=0.1):")
@@ -80,11 +81,11 @@ print()
 
 for i in range(100):
     bin_left = edges_u[i]
-    bin_right = edges_u[i+1]
+    bin_right = edges_u[i + 1]
     count = hist_u[i]
     pct = 100 * count / len(u)
     bar_len = int(60 * count / max_count_u) if max_count_u > 0 else 0
-    bar = '#' * bar_len
+    bar = "#" * bar_len
 
     if count > 100:
         marker = " <<<"
@@ -109,11 +110,11 @@ print()
 
 ratios = []
 for i in range(1, min(50, len(hist_u))):
-    if hist_u[i-1] > 0:
-        ratio = hist_u[i] / hist_u[i-1]
+    if hist_u[i - 1] > 0:
+        ratio = hist_u[i] / hist_u[i - 1]
         ratios.append(ratio)
         if i <= 20:  # Show first 20
-            print(f"  Bin {i-1:2d} → Bin {i:2d}: {ratio:.3f}")
+            print(f"  Bin {i - 1:2d} → Bin {i:2d}: {ratio:.3f}")
 
 if ratios:
     mean_ratio = np.mean(ratios[:20])
@@ -126,7 +127,7 @@ if ratios:
         print("→ SPIKE pattern (sharp, discontinuous change)")
 
 # Summary statistics
-print(f"\n" + "=" * 100)
+print("\n" + "=" * 100)
 print("SUMMARY STATISTICS")
 print("=" * 100)
 
@@ -135,11 +136,11 @@ near_L_01 = np.sum(u < 0.01)
 near_L_02 = np.sum(u < 0.02)
 near_L_05 = np.sum(u < 0.05)
 
-print(f"\nLower boundary concentration:")
-print(f"  u < 0.001: {near_L_001:6d} samples ({100*near_L_001/len(u):5.2f}%)")
-print(f"  u < 0.010: {near_L_01:6d} samples ({100*near_L_01/len(u):5.2f}%)")
-print(f"  u < 0.020: {near_L_02:6d} samples ({100*near_L_02/len(u):5.2f}%)")
-print(f"  u < 0.050: {near_L_05:6d} samples ({100*near_L_05/len(u):5.2f}%)")
+print("\nLower boundary concentration:")
+print(f"  u < 0.001: {near_L_001:6d} samples ({100 * near_L_001 / len(u):5.2f}%)")
+print(f"  u < 0.010: {near_L_01:6d} samples ({100 * near_L_01 / len(u):5.2f}%)")
+print(f"  u < 0.020: {near_L_02:6d} samples ({100 * near_L_02 / len(u):5.2f}%)")
+print(f"  u < 0.050: {near_L_05:6d} samples ({100 * near_L_05 / len(u):5.2f}%)")
 
 print("\n" + "=" * 100)
 print("CONCLUSION")

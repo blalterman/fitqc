@@ -796,15 +796,12 @@ def plot_bounds_filter_comparison(
         x: Array of parameter values (unfiltered).
         L: Lower bound of the parameter.
         U: Upper bound of the parameter.
-        bins: Number of bins or binning strategy ('auto', 'fd', 'sturges', etc.).
-            Default is 'auto' which uses numpy's histogram bin selection.
+        bins: Number of bins or binning strategy. Default is 'auto'.
         config: PlotConfig for styling. Uses defaults if None.
-        show_detail: If True and out-of-bounds samples exist, add a third panel
-            showing a zoomed view of the out-of-bounds region. Default is True.
+        show_detail: If True and out-of-bounds samples exist, adds a detail panel.
 
     Returns:
-        Figure with 2-3 subplots showing unfiltered and filtered distributions,
-        plus optional detail panel for out-of-bounds region.
+        Figure with 2-3 subplots showing unfiltered and filtered distributions.
 
     Examples:
         >>> # Dataset with failed fits at x=0 (out-of-bounds for L=0.01)
@@ -860,7 +857,7 @@ def plot_bounds_filter_comparison(
 
     # Top subplot: Original (unfiltered) data
     ax_unfiltered = axes[0]
-    counts_unfiltered, _, patches_unfiltered = ax_unfiltered.hist(
+    counts_unfiltered, _, _ = ax_unfiltered.hist(
         x,
         bins=bin_edges,
         histtype="stepfilled",
@@ -875,23 +872,26 @@ def plot_bounds_filter_comparison(
     ax_unfiltered.axvline(U, color="red", linestyle="--", linewidth=1.5, label=f"U={U}", alpha=0.7)
 
     # Add shading for out-of-bounds regions
-    y_max = counts_unfiltered.max() * 1.1
     if n_below > 0:
-        ax_unfiltered.axvspan(x_min, L, alpha=0.2, color="red", label=f"Out-of-bounds (below L): {n_below}")
+        ax_unfiltered.axvspan(
+            x_min, L, alpha=0.2, color="red", label=f"Out-of-bounds (below L): {n_below}"
+        )
     if n_above > 0:
-        ax_unfiltered.axvspan(U, x_max, alpha=0.2, color="red", label=f"Out-of-bounds (above U): {n_above}")
+        ax_unfiltered.axvspan(
+            U, x_max, alpha=0.2, color="red", label=f"Out-of-bounds (above U): {n_above}"
+        )
 
     ax_unfiltered.set_xlabel("Parameter value")
     ax_unfiltered.set_ylabel("Count")
     ax_unfiltered.set_title(
-        f"Original Data (n={n_total:,}, out-of-bounds={n_out_of_bounds:,} [{n_out_of_bounds/n_total:.2%}])"
+        f"Original Data (n={n_total:,}, out-of-bounds={n_out_of_bounds:,} [{n_out_of_bounds / n_total:.2%}])"
     )
     ax_unfiltered.grid(True, alpha=0.3)
     ax_unfiltered.legend(loc="best", fontsize=8)
 
     # Bottom subplot: Filtered data
     ax_filtered = axes[1]
-    counts_filtered, _, patches_filtered = ax_filtered.hist(
+    counts_filtered, _, _ = ax_filtered.hist(
         x_filtered,
         bins=bin_edges,
         histtype="stepfilled",
@@ -907,9 +907,7 @@ def plot_bounds_filter_comparison(
 
     ax_filtered.set_xlabel("Parameter value")
     ax_filtered.set_ylabel("Count")
-    ax_filtered.set_title(
-        f"Filtered Data (n={n_filtered:,}, retained={n_filtered/n_total:.2%})"
-    )
+    ax_filtered.set_title(f"Filtered Data (n={n_filtered:,}, retained={n_filtered / n_total:.2%})")
     ax_filtered.grid(True, alpha=0.3)
     ax_filtered.legend(loc="best", fontsize=8)
 
@@ -947,9 +945,7 @@ def plot_bounds_filter_comparison(
         if isinstance(bins, str):
             # Use auto binning for zoom region
             _, zoom_bin_edges = np.histogram(
-                x[(x >= zoom_x_min) & (x <= zoom_x_max)],
-                bins=bins,
-                range=(zoom_x_min, zoom_x_max)
+                x[(x >= zoom_x_min) & (x <= zoom_x_max)], bins=bins, range=(zoom_x_min, zoom_x_max)
             )
         else:
             # Use same bin density as main plot
@@ -959,7 +955,7 @@ def plot_bounds_filter_comparison(
 
         # Plot original data in zoom range
         x_zoom_original = x[(x >= zoom_x_min) & (x <= zoom_x_max)]
-        counts_zoom_orig, _, _ = ax_detail.hist(
+        _, _, _ = ax_detail.hist(
             x_zoom_original,
             bins=zoom_bin_edges,
             histtype="stepfilled",
@@ -967,12 +963,12 @@ def plot_bounds_filter_comparison(
             color="steelblue",
             edgecolor="black",
             linewidth=0.5,
-            label=f"Original (n={len(x_zoom_original):,})"
+            label=f"Original (n={len(x_zoom_original):,})",
         )
 
         # Plot filtered data in zoom range (should be much less or zero in out-of-bounds)
         x_zoom_filtered = x_filtered[(x_filtered >= zoom_x_min) & (x_filtered <= zoom_x_max)]
-        counts_zoom_filt, _, _ = ax_detail.hist(
+        _, _, _ = ax_detail.hist(
             x_zoom_filtered,
             bins=zoom_bin_edges,
             histtype="stepfilled",
@@ -980,16 +976,18 @@ def plot_bounds_filter_comparison(
             color="mediumseagreen",
             edgecolor="black",
             linewidth=0.5,
-            label=f"Filtered (n={len(x_zoom_filtered):,})"
+            label=f"Filtered (n={len(x_zoom_filtered):,})",
         )
 
         # Add vertical lines at bounds
         if zoom_x_min < L < zoom_x_max:
-            ax_detail.axvline(L, color="red", linestyle="--", linewidth=1.5,
-                            label=f"L={L}", alpha=0.7)
+            ax_detail.axvline(
+                L, color="red", linestyle="--", linewidth=1.5, label=f"L={L}", alpha=0.7
+            )
         if zoom_x_min < U < zoom_x_max:
-            ax_detail.axvline(U, color="red", linestyle="--", linewidth=1.5,
-                            label=f"U={U}", alpha=0.7)
+            ax_detail.axvline(
+                U, color="red", linestyle="--", linewidth=1.5, label=f"U={U}", alpha=0.7
+            )
 
         # Shade out-of-bounds regions
         if n_below > 0 and zoom_x_min < L:
@@ -1000,8 +998,7 @@ def plot_bounds_filter_comparison(
         ax_detail.set_xlabel("Parameter value")
         ax_detail.set_ylabel("Count")
         ax_detail.set_title(
-            f"{zoom_label}\n"
-            f"Removed: {n_out_of_bounds:,} samples ({n_out_of_bounds/n_total:.2%})"
+            f"{zoom_label}\nRemoved: {n_out_of_bounds:,} samples ({n_out_of_bounds / n_total:.2%})"
         )
         ax_detail.grid(True, alpha=0.3)
         ax_detail.legend(loc="best", fontsize=8)
@@ -1032,7 +1029,7 @@ def plot_interior_filter_comparison(
     Better mental model: "x0 stickiness filter" or "initial guess filter"
 
     What gets removed:
-    - Samples too close to x0 (|x - x0| / (U - L) < eps_star)
+    - Samples too close to x0 (``|x - x0| / (U - L) < eps_star``)
     - Indicates optimizer failed to explore away from initial guess
 
     What does NOT get removed:
@@ -1120,16 +1117,18 @@ def plot_interior_filter_comparison(
         eps_star = interior_result.eps_star
         x0_width = eps_star * (U - L)
         ax_unfiltered.axvspan(
-            x0 - x0_width, x0 + x0_width,
-            alpha=0.2, color="red",
-            label=f"Stuck region (ε*={eps_star:.4f}): {n_stuck} samples"
+            x0 - x0_width,
+            x0 + x0_width,
+            alpha=0.2,
+            color="red",
+            label=f"Stuck region (ε*={eps_star:.4f}): {n_stuck} samples",
         )
 
     ax_unfiltered.set_xlabel("Parameter value")
     ax_unfiltered.set_ylabel("Count")
     title_str = f"Original Data (n={n_total:,}"
     if interior_result.spike_detected:
-        title_str += f", stuck={n_stuck:,} [{n_stuck/n_total:.2%}])"
+        title_str += f", stuck={n_stuck:,} [{n_stuck / n_total:.2%}])"
     else:
         title_str += ", no x0 stickiness detected)"
     ax_unfiltered.set_title(title_str)
@@ -1153,9 +1152,7 @@ def plot_interior_filter_comparison(
 
     ax_filtered.set_xlabel("Parameter value")
     ax_filtered.set_ylabel("Count")
-    ax_filtered.set_title(
-        f"Filtered Data (n={n_filtered:,}, retained={n_filtered/n_total:.2%})"
-    )
+    ax_filtered.set_title(f"Filtered Data (n={n_filtered:,}, retained={n_filtered / n_total:.2%})")
     ax_filtered.grid(True, alpha=0.3)
     ax_filtered.legend(loc="best", fontsize=8)
 
@@ -1199,16 +1196,13 @@ def plot_combined_filter_comparison(
     - For datasets with all x ∈ [L, U]: Identical to Panel 1
 
     Panel 3: "Interior Filter Only" (if x0 provided)
-    - Removes: x0-sticky samples (|x - x0| / (U - L) < eps_star)
+    - Removes: x0-sticky samples (``|x - x0| / (U - L) < eps_star``)
     - Still shows: Out-of-bounds samples
     - Still shows: Boundary spikes
     - Skipped if x0 is None
 
-    Panel 4: "Combined Filters" ⭐ FINAL RESULT
-    - Removes ALL THREE types:
-      1. Out-of-bounds (x < L or x > U)
-      2. Boundary-sticky (too close to L or U)
-      3. x0-sticky (too close to x0, if applicable)
+    Panel 4: "Combined Filters" - FINAL RESULT
+    - Removes: out-of-bounds, boundary-sticky, and x0-sticky samples
     - This is where boundary spikes disappear!
     - Represents the cleanest, highest-quality data
 
@@ -1331,7 +1325,7 @@ def plot_combined_filter_comparison(
     ax_boundary.set_ylabel("Count")
     removed_boundary = n_total - n_boundary
     ax_boundary.set_title(
-        f"2. Boundary Filter Only (n={n_boundary:,}, removed={removed_boundary:,} [{removed_boundary/n_total:.2%}])"
+        f"2. Boundary Filter Only (n={n_boundary:,}, removed={removed_boundary:,} [{removed_boundary / n_total:.2%}])"
     )
     ax_boundary.grid(True, alpha=0.3)
 
@@ -1353,9 +1347,11 @@ def plot_combined_filter_comparison(
     ax_interior.set_xlabel("Parameter value")
     ax_interior.set_ylabel("Count")
     removed_interior = n_total - n_interior
-    title_str = f"3. Interior Filter Only"
+    title_str = "3. Interior Filter Only"
     if interior_result is not None and interior_result.spike_detected:
-        title_str += f" (n={n_interior:,}, removed={removed_interior:,} [{removed_interior/n_total:.2%}])"
+        title_str += (
+            f" (n={n_interior:,}, removed={removed_interior:,} [{removed_interior / n_total:.2%}])"
+        )
     else:
         title_str += f" (n={n_interior:,}, no x0 stickiness)"
     ax_interior.set_title(title_str)
@@ -1380,17 +1376,20 @@ def plot_combined_filter_comparison(
     ax_combined.set_ylabel("Count")
     removed_combined = n_total - n_combined
     ax_combined.set_title(
-        f"4. Combined Filters (n={n_combined:,}, removed={removed_combined:,} [{removed_combined/n_total:.2%}])"
+        f"4. Combined Filters (n={n_combined:,}, removed={removed_combined:,} [{removed_combined / n_total:.2%}])"
     )
     ax_combined.grid(True, alpha=0.3)
 
     # Match y-axis scales for direct comparison
-    y_max_overall = max(
-        counts_original.max(),
-        counts_boundary.max(),
-        counts_interior.max(),
-        counts_combined.max()
-    ) * 1.1
+    y_max_overall = (
+        max(
+            counts_original.max(),
+            counts_boundary.max(),
+            counts_interior.max(),
+            counts_combined.max(),
+        )
+        * 1.1
+    )
     for ax in axes.flat:
         ax.set_ylim(0, y_max_overall)
 

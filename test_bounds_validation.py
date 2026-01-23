@@ -1,8 +1,9 @@
 """Test the bounds validation logging in run_boundary_qc."""
 
+import json
 import logging
 import sys
-import json
+
 import pyarrow.parquet as pq
 
 from fitqc.boundary import run_boundary_qc
@@ -10,9 +11,7 @@ from fitqc.config import BoundaryConfig
 
 # Configure logging to show warnings
 logging.basicConfig(
-    level=logging.WARNING,
-    format='%(levelname)s - %(name)s - %(message)s',
-    stream=sys.stdout
+    level=logging.WARNING, format="%(levelname)s - %(name)s - %(message)s", stream=sys.stdout
 )
 
 # Load np1 test data
@@ -36,9 +35,9 @@ print(f"Samples below L: {(x < L).sum()}")
 print(f"Samples above U: {(x > U).sum()}")
 
 # Run boundary QC - should trigger warning
-print("\n" + "="*70)
+print("\n" + "=" * 70)
 print("Running boundary QC with validation enabled...")
-print("="*70 + "\n")
+print("=" * 70 + "\n")
 
 config = BoundaryConfig(
     use_quantile_analysis=True,
@@ -48,7 +47,7 @@ config = BoundaryConfig(
 
 result = run_boundary_qc(x, L, U, config)
 
-print(f"\nResults:")
+print("\nResults:")
 print(f"  Lower pileup detected: {result.lower_pileup_detected}")
 print(f"  Upper pileup detected: {result.upper_pileup_detected}")
 print(f"  t_lo_star: {result.t_lo_star}")
