@@ -5,8 +5,11 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%20|%203.12%20|%203.13-blue.svg)](https://www.python.org/downloads/)
 [![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-green.svg)](LICENSE)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://docs.astral.sh/ruff/)
+[![Status](https://img.shields.io/badge/status-0.x--alpha-red.svg)]()
 
 Fit QC diagnostics for detecting optimizer stickiness in fitted parameters.
+
+> **⚠️ Alpha Software**: This project is in early development. APIs may change, and features are still being validated.
 
 ## Overview
 
