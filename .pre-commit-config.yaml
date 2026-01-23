@@ -5,3 +5,9 @@ repos:
       - id: ruff
         args: [--fix]
       - id: ruff-format
+      # Whole-repo format check - catches pre-existing violations
+      - id: ruff-format
+        name: ruff-format-check-all
+        args: [--check]
+        pass_filenames: false
+        always_run: true
