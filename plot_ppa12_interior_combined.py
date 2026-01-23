@@ -59,6 +59,18 @@ for dataset_name in datasets:
 
     print(f"  L={L}, U={U}, x0={x0}, bins={bins}")
 
+    # Determine dataset family for subdirectory
+    if dataset_name.startswith("e_dv_pp"):
+        subdir = "e_dv_pp"
+    elif dataset_name.startswith("e_dv_ap"):
+        subdir = "e_dv_ap"
+    else:
+        subdir = dataset_name
+
+    # Create output directory
+    dataset_output_dir = output_dir / subdir
+    dataset_output_dir.mkdir(parents=True, exist_ok=True)
+
     # Run boundary QC
     print("  Running boundary QC...")
     boundary_result = run_boundary_qc(x, L, U, boundary_config)
@@ -72,11 +84,7 @@ for dataset_name in datasets:
         # Create interior filter comparison plot
         print("  Creating interior filter comparison plot...")
         fig = plot_interior_filter_comparison(x, x0, L, U, interior_result, bins=bins)
-        output_file = output_dir / f"{dataset_name}_interior_filter_comparison.png"
-        fig.savefig(output_file, dpi=150, bbox_inches="tight")
-        print(f"  Saved: {output_file}")
-
-        output_file_hires = output_dir / f"{dataset_name}_interior_filter_comparison_hires.png"
+        output_file_hires = dataset_output_dir / f"{dataset_name}_interior_filter_comparison_hires.png"
         fig.savefig(output_file_hires, dpi=300, bbox_inches="tight")
         print(f"  Saved: {output_file_hires}")
     else:
@@ -87,23 +95,16 @@ for dataset_name in datasets:
     fig = plot_combined_filter_comparison(
         x, x0, L, U, interior_result, boundary_result, bins=bins
     )
-    output_file = output_dir / f"{dataset_name}_combined_filter_comparison.png"
-    fig.savefig(output_file, dpi=150, bbox_inches="tight")
-    print(f"  Saved: {output_file}")
-
-    output_file_hires = output_dir / f"{dataset_name}_combined_filter_comparison_hires.png"
+    output_file_hires = dataset_output_dir / f"{dataset_name}_combined_filter_comparison_hires.png"
     fig.savefig(output_file_hires, dpi=300, bbox_inches="tight")
     print(f"  Saved: {output_file_hires}")
 
     print()
 
-print(f"✓ All plots saved to {output_dir}/")
-print("\nInterior filter comparison plots:")
-for dataset_name in ["A_He", "e_dv_pp", "e_dv_ap"]:
-    print(f"  - {dataset_name}_interior_filter_comparison.png")
-    print(f"  - {dataset_name}_interior_filter_comparison_hires.png")
-
-print("\nCombined filter comparison plots:")
+print(f"✓ All plots saved to {output_dir}/ subdirectories")
+print("\nGenerated plots (300 DPI high-res only):")
 for dataset_name in datasets:
-    print(f"  - {dataset_name}_combined_filter_comparison.png")
-    print(f"  - {dataset_name}_combined_filter_comparison_hires.png")
+    print(f"  {dataset_name}:")
+    if dataset_name in ["A_He", "e_dv_pp", "e_dv_ap"]:
+        print(f"    - {dataset_name}_interior_filter_comparison_hires.png")
+    print(f"    - {dataset_name}_combined_filter_comparison_hires.png")

@@ -83,12 +83,7 @@ def regenerate_dataset_plots(dataset_name: str):
     # Create comparison plot with zoom panel (show_detail=True by default)
     fig = plot_bounds_filter_comparison(x, L, U, bins=bins, show_detail=True)
 
-    # Save figures
-    output_file = output_dir / f"{dataset_name}_bounds_filter_comparison.png"
-    fig.savefig(output_file, dpi=150, bbox_inches="tight")
-    print(f"  Saved: {output_file}")
-
-    # Also save a high-res version
+    # Save high-res version only (300 DPI)
     output_file_hires = output_dir / f"{dataset_name}_bounds_filter_comparison_hires.png"
     fig.savefig(output_file_hires, dpi=300, bbox_inches="tight")
     print(f"  Saved: {output_file_hires}")
