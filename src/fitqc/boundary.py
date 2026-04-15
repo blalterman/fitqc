@@ -440,6 +440,87 @@ class BoundaryResult:
     quantile_grid_refined_lower: np.ndarray | None = None
     #: Refined quantile grid for upper boundary (only with refine_transition=True).
     quantile_grid_refined_upper: np.ndarray | None = None
+    #: Raw Kneedle elbows for lower boundary (per-iteration list from refinement).
+    kneedle_elbows_lower: list[float | None] | None = None
+    #: Raw Kneedle elbows for upper boundary (per-iteration list from refinement).
+    kneedle_elbows_upper: list[float | None] | None = None
+    #: Raw aggregated tolerance for lower boundary (before check_excess_mass).
+    t_lo_raw: float | None = None
+    #: Raw aggregated tolerance for upper boundary (before check_excess_mass).
+    t_hi_raw: float | None = None
+    #: Quantile grid used for Kneedle detection.
+    kneedle_quantile_grid: tuple[float, ...] | None = None
+
+
+def _check_excess_mass(
+    t_star: float | None,
+    mass_curve: np.ndarray,
+    tol_grid: np.ndarray,
+    pileup_threshold: float,
+    excess_ratio: float,
+) -> tuple[bool, float | None]:
+    """Check if there's excess mass at the elbow tolerance.
+
+    Special handling for t≈0 (delta function at exact boundary):
+    When elbow is detected at t≈0, this indicates samples concentrated
+    exactly at the boundary (e.g., optimizer stuck at L=0). We measure
+    the pileup using the first measurable non-zero tolerance point.
+
+    Parameters
+    ----------
+    t_star : float or None
+        Raw elbow tolerance to validate.
+    mass_curve : np.ndarray
+        Tail-mass curve (P(u < tol) or P(u > 1-tol)).
+    tol_grid : np.ndarray
+        Array of tolerance values corresponding to mass_curve.
+    pileup_threshold : float
+        Threshold below which elbows are treated as delta-function candidates.
+    excess_ratio : float
+        Minimum mass/tol ratio to declare pileup.
+
+    Returns
+    -------
+    tuple[bool, float | None]
+        (has_pileup, validated_tolerance). If no excess mass, tolerance is None.
+    """
+    if t_star is None:
+        return False, None
+
+    # Special case: elbow at very small t indicates delta function at boundary
+    # This happens when optimizer gets stuck exactly at L or U
+    # Example: A_He PPA12 has 1.64% samples at exactly L=0
+    # After iterative refinement and aggregation, the median elbow might be
+    # slightly above zero (e.g., 0.0003) even when many individual elbows are at 0
+    # Use pileup_threshold as the cutoff: elbows smaller than this need special handling
+    if t_star < pileup_threshold:
+        # Check if this small elbow represents a genuine delta function pileup
+        # Find first non-zero tolerance point to measure the pileup
+        # Skip tol_grid[0] which is often exactly 0
+        for idx in range(1, min(5, len(tol_grid))):  # Check first few points
+            t_check = tol_grid[idx]
+            if t_check > 1e-10:  # Found measurable tolerance
+                mass_check = mass_curve[idx]
+                # For delta function, mass should be nearly constant up to pileup width
+                # Check if mass >> uniform expectation at this tolerance
+                if mass_check > t_check * excess_ratio:
+                    # Valid pileup detected
+                    # Return the measurement tolerance (not the elbow value)
+                    return True, float(t_check)
+        # No measurable pileup found - elbow is small but no excess mass
+        return False, None
+
+    # Normal case: elbow at measurable tolerance (t_star >= pileup_threshold)
+    # Find the mass at t_star by interpolation
+    idx = np.searchsorted(tol_grid, t_star)
+    if idx >= len(mass_curve):
+        idx = len(mass_curve) - 1
+    mass_at_elbow = mass_curve[idx]
+    # For uniform data, expected mass = t_star
+    # Pileup if observed >> expected
+    has_pileup = mass_at_elbow > t_star * excess_ratio
+    # Only return tolerance if there's genuine pileup
+    return has_pileup, float(t_star) if has_pileup else None
 
 
 def run_boundary_qc(
@@ -570,6 +651,9 @@ def run_boundary_qc(
     quantile_elbows_result = None
     quantile_grid_refined_lower = None
     quantile_grid_refined_upper = None
+    kneedle_elbows_lower = None
+    kneedle_elbows_upper = None
+    kneedle_quantile_grid = None
 
     # Choose detection method based on config
     if config.use_quantile_analysis:
@@ -653,6 +737,10 @@ def run_boundary_qc(
                         t_lo_raw = t_broad
                     else:
                         t_hi_raw = t_broad
+
+            kneedle_elbows_lower = elbows_lower
+            kneedle_elbows_upper = elbows_upper
+            kneedle_quantile_grid = tuple(float(q) for q in quantile_grid_arr)
         else:
             # Single-pass quantile analysis (no refinement)
             # Compute quantile curves for lower boundary
@@ -668,6 +756,10 @@ def run_boundary_qc(
             # Aggregate elbows via median
             t_lo_raw = _aggregate_elbows_median(elbows_lower, config.min_quantile_agreement)
             t_hi_raw = _aggregate_elbows_median(elbows_upper, config.min_quantile_agreement)
+
+            kneedle_elbows_lower = elbows_lower
+            kneedle_elbows_upper = elbows_upper
+            kneedle_quantile_grid = tuple(float(q) for q in quantile_grid_arr)
 
         # Store quantile elbows for diagnostics.
         # Use a diagnostic tol_grid capped at pileup_threshold for CDF-inverse
@@ -752,67 +844,15 @@ def run_boundary_qc(
             elbow_tols, elbow_upper_mass, curve="concave", direction="increasing"
         )
 
-    # Detect pileup based on whether elbow shows excess mass
-    # For uniform data, we expect P(u < tol) ≈ tol
-    # Pileup means observed mass >> expected mass at the elbow
-    # We use a ratio threshold: mass / tol > excess_ratio indicates pileup
     pileup_threshold = config.pileup_threshold
     excess_ratio = config.excess_ratio
 
-    def check_excess_mass(
-        t_star: float | None, mass_curve: np.ndarray
-    ) -> tuple[bool, float | None]:
-        """Check if there's excess mass at the elbow tolerance.
-
-        Special handling for t≈0 (delta function at exact boundary):
-        When elbow is detected at t≈0, this indicates samples concentrated
-        exactly at the boundary (e.g., optimizer stuck at L=0). We measure
-        the pileup using the first measurable non-zero tolerance point.
-
-        Returns:
-            Tuple of (has_pileup, validated_tolerance).
-            If no excess mass, tolerance is set to None.
-        """
-        if t_star is None:
-            return False, None
-
-        # Special case: elbow at very small t indicates delta function at boundary
-        # This happens when optimizer gets stuck exactly at L or U
-        # Example: A_He PPA12 has 1.64% samples at exactly L=0
-        # After iterative refinement and aggregation, the median elbow might be
-        # slightly above zero (e.g., 0.0003) even when many individual elbows are at 0
-        # Use pileup_threshold as the cutoff: elbows smaller than this need special handling
-        if t_star < pileup_threshold:
-            # Check if this small elbow represents a genuine delta function pileup
-            # Find first non-zero tolerance point to measure the pileup
-            # Skip tol_grid[0] which is often exactly 0
-            for idx in range(1, min(5, len(tol_grid))):  # Check first few points
-                t_check = tol_grid[idx]
-                if t_check > 1e-10:  # Found measurable tolerance
-                    mass_check = mass_curve[idx]
-                    # For delta function, mass should be nearly constant up to pileup width
-                    # Check if mass >> uniform expectation at this tolerance
-                    if mass_check > t_check * excess_ratio:
-                        # Valid pileup detected
-                        # Return the measurement tolerance (not the elbow value)
-                        return True, float(t_check)
-            # No measurable pileup found - elbow is small but no excess mass
-            return False, None
-
-        # Normal case: elbow at measurable tolerance (t_star >= pileup_threshold)
-        # Find the mass at t_star by interpolation
-        idx = np.searchsorted(tol_grid, t_star)
-        if idx >= len(mass_curve):
-            idx = len(mass_curve) - 1
-        mass_at_elbow = mass_curve[idx]
-        # For uniform data, expected mass = t_star
-        # Pileup if observed >> expected
-        has_pileup = mass_at_elbow > t_star * excess_ratio
-        # Only return tolerance if there's genuine pileup
-        return has_pileup, float(t_star) if has_pileup else None
-
-    lower_pileup_detected, t_lo_star = check_excess_mass(t_lo_raw, lower_mass_curve)
-    upper_pileup_detected, t_hi_star = check_excess_mass(t_hi_raw, upper_mass_curve)
+    lower_pileup_detected, t_lo_star = _check_excess_mass(
+        t_lo_raw, lower_mass_curve, tol_grid, pileup_threshold, excess_ratio
+    )
+    upper_pileup_detected, t_hi_star = _check_excess_mass(
+        t_hi_raw, upper_mass_curve, tol_grid, pileup_threshold, excess_ratio
+    )
 
     # Mechanism 2 — delta-function propagation (refine_transition only):
     # For delta-function pileups (t_raw ≈ 0), check_excess_mass returns a very
@@ -876,4 +916,9 @@ def run_boundary_qc(
         quantile_elbows=quantile_elbows_result,
         quantile_grid_refined_lower=quantile_grid_refined_lower,
         quantile_grid_refined_upper=quantile_grid_refined_upper,
+        kneedle_elbows_lower=kneedle_elbows_lower,
+        kneedle_elbows_upper=kneedle_elbows_upper,
+        t_lo_raw=t_lo_raw,
+        t_hi_raw=t_hi_raw,
+        kneedle_quantile_grid=kneedle_quantile_grid,
     )
