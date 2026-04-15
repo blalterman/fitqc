@@ -379,12 +379,17 @@ class TestIterativeKneedleRefinement:
         - Convergence logic broken (call_count > 10, infinite loop)
         - Grid not actually refined between iterations (grid size unchanged)
         """
-        # Configure mock to return different values on each call
-        # This simulates elbow moving during refinement (convergence)
+        # Configure mock to return different values on each call.
+        # Both boundaries call select_elbow during refinement.
+        # Lower boundary: delta function (elbow ≈ 0) runs 2 iterations.
+        # Upper boundary: normal convergence may take 1-3 iterations.
         mock_elbow.side_effect = [
-            0.02,  # First iteration: elbow at 2%
-            0.0195,  # Second iteration: elbow refined to 1.95%
-            0.0195,  # Third iteration: converged (same value)
+            0.02,  # Lower iter 0
+            0.02,  # Lower iter 1 (delta continue)
+            0.02,  # Upper iter 0
+            0.0195,  # Upper iter 1
+            0.0195,  # Upper iter 2 (converged)
+            0.0195,  # Extra safety margin
         ]
 
         rng = np.random.default_rng(42)
@@ -407,8 +412,8 @@ class TestIterativeKneedleRefinement:
             f"This means iteration loop is broken or not running."
         )
 
-        # 2. Verify it didn't loop forever
-        assert call_count <= 5, (
+        # 2. Verify it didn't loop forever (both boundaries combined)
+        assert call_count <= 10, (
             f"Refinement should converge, not loop forever. "
             f"Called select_elbow {call_count} times. "
             f"Check convergence condition in iterative refinement."
@@ -460,11 +465,12 @@ class TestIterativeKneedleRefinement:
         assert result.lower_pileup_detected is False, "Should not detect pileup when no elbow found"
         assert result.t_lo_star is None, "t_lo_star should be None when no elbow found"
 
-        # Verify we didn't try to refine around a None elbow
-        # (should have stopped after first iteration)
-        assert mock_elbow.call_count == 1, (
-            f"Should not attempt refinement when no elbow found. "
-            f"Expected 1 call to select_elbow, got {mock_elbow.call_count}. "
+        # Verify we didn't try to refine around a None elbow.
+        # Each boundary (lower + upper) calls select_elbow once, then stops
+        # because _aggregate_elbows_median returns None.
+        assert mock_elbow.call_count == 2, (
+            f"Should call select_elbow once per boundary (2 total). "
+            f"Got {mock_elbow.call_count}. "
             f"Refinement should check for None before iterating."
         )
 

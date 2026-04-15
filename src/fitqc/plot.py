@@ -1250,9 +1250,13 @@ def plot_combined_filter_comparison(
     x = x[np.isfinite(x)]
     n_total = len(x)
 
-    # Apply boundary filter
+    # Apply boundary filter: out-of-bounds removal + stickiness thresholds
     u = (x - L) / (U - L)
     boundary_mask = (u >= 0) & (u <= 1)
+    if boundary_result.lower_pileup_detected and boundary_result.t_lo_star is not None:
+        boundary_mask &= u > boundary_result.t_lo_star
+    if boundary_result.upper_pileup_detected and boundary_result.t_hi_star is not None:
+        boundary_mask &= u < (1 - boundary_result.t_hi_star)
     x_boundary_only = x[boundary_mask]
 
     # Apply interior filter (if applicable)
@@ -1277,8 +1281,8 @@ def plot_combined_filter_comparison(
     n_interior = len(x_interior_only)
     n_combined = len(x_combined)
 
-    # Create figure with 2x2 grid
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10), dpi=config.dpi)
+    # Create figure with 4x2 grid: linear (top) and log (bottom)
+    fig, axes = plt.subplots(4, 2, figsize=(16, 22), dpi=config.dpi)
 
     # Determine bin edges
     if isinstance(bins, str):
@@ -1286,102 +1290,111 @@ def plot_combined_filter_comparison(
     else:
         bin_edges = np.linspace(L, U, bins + 1)
 
-    # Top-left: Original data
-    ax_original = axes[0, 0]
-    counts_original, _, _ = ax_original.hist(
-        x,
-        bins=bin_edges,
-        histtype="stepfilled",
-        alpha=0.7,
-        color="steelblue",
-        edgecolor="black",
-        linewidth=0.5,
-    )
-    ax_original.axvline(L, color="red", linestyle="--", linewidth=1, alpha=0.5)
-    ax_original.axvline(U, color="red", linestyle="--", linewidth=1, alpha=0.5)
-    if x0 is not None:
-        ax_original.axvline(x0, color="orange", linestyle="--", linewidth=1.5, alpha=0.7)
-    ax_original.set_xlabel("Parameter value")
-    ax_original.set_ylabel("Count")
-    ax_original.set_title(f"1. Original Data (n={n_total:,})")
-    ax_original.grid(True, alpha=0.3)
+    # Colors: high-contrast pair for original vs filtered overlay
+    color_original = "#888888"  # Gray for original (background)
+    color_filtered = "#d62728"  # Red for filtered (foreground)
 
-    # Top-right: Boundary filtered only
-    ax_boundary = axes[0, 1]
-    counts_boundary, _, _ = ax_boundary.hist(
-        x_boundary_only,
-        bins=bin_edges,
-        histtype="stepfilled",
-        alpha=0.7,
-        color="coral",
-        edgecolor="black",
-        linewidth=0.5,
+    # --- Helper to plot a single panel ---
+    def _plot_panel(
+        ax,
+        data,
+        color,
+        edgecolor,
+        alpha,
+        title,
+        show_bounds=True,
+        bounds_color="red",
+        overlay_original=False,
+    ):
+        if overlay_original:
+            ax.hist(
+                x,
+                bins=bin_edges,
+                histtype="stepfilled",
+                alpha=0.5,
+                color=color_original,
+                edgecolor="none",
+                label="Original",
+                zorder=1,
+            )
+            counts, _, _ = ax.hist(
+                data,
+                bins=bin_edges,
+                histtype="stepfilled",
+                alpha=0.85,
+                color=color_filtered,
+                edgecolor="black",
+                linewidth=0.3,
+                label="Filtered",
+                zorder=2,
+            )
+            ax.legend(fontsize=8, loc="upper right")
+        else:
+            counts, _, _ = ax.hist(
+                data,
+                bins=bin_edges,
+                histtype="stepfilled",
+                alpha=alpha,
+                color=color,
+                edgecolor=edgecolor,
+                linewidth=0.5,
+            )
+        if show_bounds:
+            ax.axvline(L, color=bounds_color, linestyle="--", linewidth=1, alpha=0.5)
+            ax.axvline(U, color=bounds_color, linestyle="--", linewidth=1, alpha=0.5)
+        if x0 is not None:
+            ax.axvline(x0, color="orange", linestyle="--", linewidth=1.5, alpha=0.7)
+        ax.set_xlabel("Parameter value")
+        ax.set_title(title)
+        ax.grid(True, alpha=0.3)
+        return counts
+
+    # --- Row 0: Linear scale panels ---
+    counts_original = _plot_panel(
+        axes[0, 0], x, "steelblue", "black", 0.7, f"1. Original (n={n_total:,})"
     )
-    ax_boundary.axvline(L, color="green", linestyle="--", linewidth=1, alpha=0.5)
-    ax_boundary.axvline(U, color="green", linestyle="--", linewidth=1, alpha=0.5)
-    if x0 is not None:
-        ax_boundary.axvline(x0, color="orange", linestyle="--", linewidth=1.5, alpha=0.7)
-    ax_boundary.set_xlabel("Parameter value")
-    ax_boundary.set_ylabel("Count")
+    axes[0, 0].set_ylabel("Count")
+
     removed_boundary = n_total - n_boundary
-    ax_boundary.set_title(
-        f"2. Boundary Filter Only (n={n_boundary:,}, removed={removed_boundary:,} [{removed_boundary / n_total:.2%}])"
+    counts_boundary = _plot_panel(
+        axes[0, 1],
+        x_boundary_only,
+        "coral",
+        "black",
+        0.7,
+        f"2. Boundary Filter (n={n_boundary:,}, "
+        f"removed={removed_boundary:,} [{removed_boundary / n_total:.2%}])",
+        bounds_color="green",
     )
-    ax_boundary.grid(True, alpha=0.3)
+    axes[0, 1].set_ylabel("Count")
 
-    # Bottom-left: Interior filtered only
-    ax_interior = axes[1, 0]
-    counts_interior, _, _ = ax_interior.hist(
-        x_interior_only,
-        bins=bin_edges,
-        histtype="stepfilled",
-        alpha=0.7,
-        color="plum",
-        edgecolor="black",
-        linewidth=0.5,
-    )
-    ax_interior.axvline(L, color="red", linestyle="--", linewidth=1, alpha=0.5)
-    ax_interior.axvline(U, color="red", linestyle="--", linewidth=1, alpha=0.5)
-    if x0 is not None:
-        ax_interior.axvline(x0, color="green", linestyle="--", linewidth=1.5, alpha=0.7)
-    ax_interior.set_xlabel("Parameter value")
-    ax_interior.set_ylabel("Count")
     removed_interior = n_total - n_interior
-    title_str = "3. Interior Filter Only"
+    title_int = "3. Interior Filter"
     if interior_result is not None and interior_result.spike_detected:
-        title_str += (
+        title_int += (
             f" (n={n_interior:,}, removed={removed_interior:,} [{removed_interior / n_total:.2%}])"
         )
     else:
-        title_str += f" (n={n_interior:,}, no x0 stickiness)"
-    ax_interior.set_title(title_str)
-    ax_interior.grid(True, alpha=0.3)
+        title_int += f" (n={n_interior:,}, no x0 stickiness)"
+    counts_interior = _plot_panel(axes[1, 0], x_interior_only, "plum", "black", 0.7, title_int)
+    axes[1, 0].set_ylabel("Count")
 
-    # Bottom-right: Combined filtering
-    ax_combined = axes[1, 1]
-    counts_combined, _, _ = ax_combined.hist(
-        x_combined,
-        bins=bin_edges,
-        histtype="stepfilled",
-        alpha=0.7,
-        color="mediumseagreen",
-        edgecolor="black",
-        linewidth=0.5,
-    )
-    ax_combined.axvline(L, color="green", linestyle="--", linewidth=1, alpha=0.5)
-    ax_combined.axvline(U, color="green", linestyle="--", linewidth=1, alpha=0.5)
-    if x0 is not None:
-        ax_combined.axvline(x0, color="green", linestyle="--", linewidth=1.5, alpha=0.7)
-    ax_combined.set_xlabel("Parameter value")
-    ax_combined.set_ylabel("Count")
     removed_combined = n_total - n_combined
-    ax_combined.set_title(
-        f"4. Combined Filters (n={n_combined:,}, removed={removed_combined:,} [{removed_combined / n_total:.2%}])"
+    counts_combined = _plot_panel(
+        axes[1, 1],
+        x_combined,
+        None,
+        None,
+        None,
+        f"4. Combined (n={n_combined:,}, removed={removed_combined:,} "
+        f"[{removed_combined / n_total:.2%}])",
+        bounds_color="green",
+        overlay_original=True,
     )
-    ax_combined.grid(True, alpha=0.3)
+    axes[1, 1].set_ylabel("Count")
 
-    # Match y-axis scales for direct comparison
-    y_max_overall = (
+    # Match y-axis for linear panels (rows 0-1)
+    y_max_linear = (
         max(
             counts_original.max(),
             counts_boundary.max(),
@@ -1390,8 +1403,46 @@ def plot_combined_filter_comparison(
         )
         * 1.1
     )
-    for ax in axes.flat:
-        ax.set_ylim(0, y_max_overall)
+    for ax in axes[:2].flat:
+        ax.set_ylim(0, y_max_linear)
+
+    # --- Row 2-3: Log scale panels (same layout, log y-axis) ---
+    _plot_panel(
+        axes[2, 0], x, "steelblue", "black", 0.7, f"5. Original \u2014 log scale (n={n_total:,})"
+    )
+    axes[2, 0].set_ylabel("Count (log)")
+    axes[2, 0].set_yscale("log")
+
+    _plot_panel(
+        axes[2, 1],
+        x_boundary_only,
+        "coral",
+        "black",
+        0.7,
+        "6. Boundary Filter \u2014 log scale",
+        bounds_color="green",
+    )
+    axes[2, 1].set_ylabel("Count (log)")
+    axes[2, 1].set_yscale("log")
+
+    _plot_panel(
+        axes[3, 0], x_interior_only, "plum", "black", 0.7, "7. Interior Filter \u2014 log scale"
+    )
+    axes[3, 0].set_ylabel("Count (log)")
+    axes[3, 0].set_yscale("log")
+
+    _plot_panel(
+        axes[3, 1],
+        x_combined,
+        None,
+        None,
+        None,
+        "8. Combined \u2014 log scale",
+        bounds_color="green",
+        overlay_original=True,
+    )
+    axes[3, 1].set_ylabel("Count (log)")
+    axes[3, 1].set_yscale("log")
 
     fig.tight_layout()
 

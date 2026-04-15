@@ -317,7 +317,7 @@ def _refine_elbow_iteratively(
     quantile_grid: np.ndarray,
     max_iterations: int = 5,
     convergence_tol: float = 1e-6,
-) -> tuple[float | None, np.ndarray]:
+) -> tuple[float | None, np.ndarray, float | None, np.ndarray, list]:
     """Iteratively refine quantile grid to improve elbow detection.
 
     Args:
@@ -328,57 +328,92 @@ def _refine_elbow_iteratively(
         convergence_tol: Elbow change threshold for convergence.
 
     Returns:
-        Tuple of (final_elbow, final_quantile_grid).
+        Tuple of (final_tol_elbow, final_quantile_grid, final_quantile_elbow,
+        tol_at_quantile, elbows_list).  The last two are from the final
+        iteration and can be reused for diagnostics.
     """
+    from fitqc._quantile_utils import _aggregate_elbows_median
+
     current_grid = quantile_grid.copy()
     previous_elbow = None
-    tol_max = tol_grid[-1]
-    # Reject elbows within 1% of tol_max (likely boundary artifacts)
-    tol_max_threshold = tol_max * 0.99
+    first_elbow = None
+    first_quantile_elbow = None
+    _delta_origin = False  # Set when iter 0 detects a delta function
+    _delta_quantile = None
+    # Keep last iteration's diagnostic data for caller reuse
+    last_tol_at_quantile: np.ndarray = np.array([])
+    last_elbows: list[float | None] = []
 
     for _iteration in range(max_iterations):
         # Compute quantile curves with current grid
         tol_at_quantile, elbows = _compute_quantile_curves_boundary(
             u_sorted, tol_grid, current_grid
         )
+        last_tol_at_quantile = tol_at_quantile
+        last_elbows = elbows
 
-        # Filter out elbows that are too close to tol_max (boundary artifacts)
-        filtered_elbows = [e if (e is not None and e < tol_max_threshold) else None for e in elbows]
-
-        # Aggregate elbows
-        from fitqc._quantile_utils import _aggregate_elbows_median
-
-        current_elbow = _aggregate_elbows_median(filtered_elbows, min_agreement_frac=0.5)
+        # Aggregate elbows (no hard artifact filter — let check_excess_mass validate)
+        current_elbow = _aggregate_elbows_median(elbows, min_agreement_frac=0.5)
 
         # If no elbow found, stop iteration
         if current_elbow is None:
-            return None, current_grid
+            return None, current_grid, None, tol_at_quantile, elbows
 
-        # Special case: elbow at t≈0 (delta function at boundary)
-        # Don't attempt to refine around t=0 - numerical issues with quantile inversion
-        # Just return the initial detection
+        # Map tolerance-space elbow to quantile-space via interpolation.
+        # tol_at_quantile is monotonically non-decreasing (CDF inverse).
+        # For delta functions (current_elbow ≈ 0), np.interp returns the first
+        # grid point — a small value that signals "delta" to the caller.
+        # The actual pileup fraction is recovered downstream via mass(0).
+        elbow_quantile = float(np.interp(current_elbow, tol_at_quantile, current_grid))
+
+        # Track first-iteration elbow for stability guard
+        if first_elbow is None:
+            first_elbow = current_elbow
+            first_quantile_elbow = elbow_quantile
+
+        # If we're returning from a delta-continue (iter 0 was a delta,
+        # we refined the grid, now on iter 1): return with the delta
+        # values but the grown grid and refreshed tol_at_quantile.
+        if _delta_origin:
+            return 0.0, current_grid, _delta_quantile, tol_at_quantile, elbows
+
+        # Special case: elbow at t≈0 (delta function at boundary).
+        # Refine once around the quantile elbow before returning so that the
+        # grid actually grows (needed for grid-resolution diagnostics).
         if current_elbow < 1e-10:
-            return current_elbow, current_grid
+            if _iteration == 0 and elbow_quantile is not None:
+                _delta_origin = True
+                _delta_quantile = elbow_quantile
+                current_grid = _refine_quantile_grid_around_elbow(
+                    current_grid, elbow_quantile, n_points=15
+                )
+                previous_elbow = current_elbow
+                continue
+            return current_elbow, current_grid, elbow_quantile, tol_at_quantile, elbows
 
-        # Check convergence
+        # Stability guard: if refinement degraded significantly, revert to first
+        if previous_elbow is not None and current_elbow < first_elbow * 0.3:
+            return (
+                first_elbow,
+                current_grid,
+                first_quantile_elbow,
+                tol_at_quantile,
+                elbows,
+            )
+
+        # Check convergence (relative tolerance)
         if previous_elbow is not None:
-            if abs(current_elbow - previous_elbow) < convergence_tol:
-                # Converged
-                return current_elbow, current_grid
+            rel_tol = max(convergence_tol, 0.03 * abs(current_elbow))
+            if abs(current_elbow - previous_elbow) < rel_tol:
+                return current_elbow, current_grid, elbow_quantile, tol_at_quantile, elbows
 
-        # Refine grid around current elbow
-        # Find which quantile corresponds to this tolerance
-        # We need to find q such that tol_at_quantile[q] ≈ current_elbow
-        idx = np.argmin(np.abs(tol_at_quantile - current_elbow))
-        elbow_quantile = current_grid[idx]
-
-        # Refine grid
+        # Refine grid around current elbow quantile
         current_grid = _refine_quantile_grid_around_elbow(current_grid, elbow_quantile, n_points=15)
 
         previous_elbow = current_elbow
 
     # Max iterations reached - return last result
-    return current_elbow, current_grid
+    return current_elbow, current_grid, elbow_quantile, last_tol_at_quantile, last_elbows
 
 
 @dataclass
@@ -511,6 +546,15 @@ def run_boundary_qc(
     # Build tolerance grid based on grid_mode
     tol_grid = _build_tolerance_grid(config)
 
+    # Extend tolerance grid when refinement is enabled so that broad pileups
+    # (elbows at tol > tol_max) can be detected.
+    if config.refine_transition:
+        tol_max_extended = max(config.quantile_grid)
+        if tol_max_extended > tol_grid[-1]:
+            n_ext = max(20, int((tol_max_extended - tol_grid[-1]) / 0.005))
+            extension = np.linspace(tol_grid[-1], tol_max_extended, n_ext + 1)[1:]
+            tol_grid = np.concatenate([tol_grid, extension])
+
     # Sort u for efficient tail_mass computation
     u_sorted = np.sort(u)
 
@@ -534,29 +578,81 @@ def run_boundary_qc(
 
         if config.refine_transition:
             # Iterative refinement mode
-            t_lo_raw, quantile_grid_refined_lower = _refine_elbow_iteratively(
-                u_sorted, tol_grid, quantile_grid_arr, max_iterations=5
-            )
-            t_hi_raw, quantile_grid_refined_upper = _refine_elbow_iteratively(
+            (
+                t_lo_raw,
+                quantile_grid_refined_lower,
+                q_lo_elbow,
+                tol_at_quantile_lower,
+                elbows_lower,
+            ) = _refine_elbow_iteratively(u_sorted, tol_grid, quantile_grid_arr, max_iterations=5)
+            (
+                t_hi_raw,
+                quantile_grid_refined_upper,
+                q_hi_elbow,
+                tol_at_quantile_upper,
+                elbows_upper,
+            ) = _refine_elbow_iteratively(
                 one_minus_u_sorted, tol_grid, quantile_grid_arr, max_iterations=5
             )
 
-            # Compute final quantile curves with refined grids for diagnostics
-            if quantile_grid_refined_lower is not None:
-                tol_at_quantile_lower, elbows_lower = _compute_quantile_curves_boundary(
-                    u_sorted, tol_grid, quantile_grid_refined_lower
+            # Mechanism 1 — spread-pileup propagation:
+            # For concentrated (but non-delta) pileups the tolerance elbow is
+            # very small because the CDF-inverse at the pileup fraction maps
+            # to a tiny tolerance.  Override with half the quantile elbow
+            # (≈ pileup width, not fraction) so check_excess_mass's normal
+            # case validates instead of the delta branch.
+            # Guards:
+            #  - mass(0) < 1e-10: excludes delta functions where samples sit
+            #    at the exact boundary (those are handled by Mechanism 2)
+            #  - t < 0.2*q: excludes very narrow pileups where the tolerance
+            #    elbow IS a reasonable estimate of the pileup width
+            for _side_label, q_ref in [
+                ("lower", q_lo_elbow),
+                ("upper", q_hi_elbow),
+            ]:
+                t_val = t_lo_raw if _side_label == "lower" else t_hi_raw
+                mass_at_zero = (
+                    lower_mass_curve[0] if _side_label == "lower" else upper_mass_curve[0]
                 )
-            else:
-                tol_at_quantile_lower = np.array([])
-                elbows_lower = []
+                if (
+                    t_val is not None
+                    and t_val < config.pileup_threshold
+                    and q_ref is not None
+                    and q_ref > config.pileup_threshold
+                    and mass_at_zero < 1e-10
+                    and t_val < 0.2 * q_ref
+                ):
+                    override = max(q_ref / 2, config.pileup_threshold)
+                    if _side_label == "lower":
+                        t_lo_raw = override
+                    else:
+                        t_hi_raw = override
 
-            if quantile_grid_refined_upper is not None:
-                tol_at_quantile_upper, elbows_upper = _compute_quantile_curves_boundary(
-                    one_minus_u_sorted, tol_grid, quantile_grid_refined_upper
-                )
-            else:
-                tol_at_quantile_upper = np.array([])
-                elbows_upper = []
+            # Mechanism 3 — broad-pileup fallback:
+            # When the quantile analysis finds only a weak elbow (mass ratio
+            # barely above excess_ratio), the pileup may extend well beyond
+            # the detected tolerance.  Search the mass curve for the largest
+            # tolerance that still shows excess mass.
+            for _side_label in ["lower", "upper"]:
+                t_raw = t_lo_raw if _side_label == "lower" else t_hi_raw
+                mc = lower_mass_curve if _side_label == "lower" else upper_mass_curve
+                if t_raw is None or t_raw < config.pileup_threshold:
+                    continue
+                idx_t = min(int(np.searchsorted(tol_grid, t_raw)), len(mc) - 1)
+                mass_ratio = mc[idx_t] / t_raw if t_raw > 0 else 0
+                if mass_ratio >= 2.0 * config.excess_ratio:
+                    continue  # Strong excess — quantile result is reliable
+                # Weak excess: search backward for the true pileup extent
+                t_broad = t_raw
+                for j in range(len(tol_grid) - 1, idx_t, -1):
+                    if tol_grid[j] > 0 and mc[j] / tol_grid[j] > config.excess_ratio:
+                        t_broad = float(tol_grid[j])
+                        break
+                if t_broad > t_raw * 3:
+                    if _side_label == "lower":
+                        t_lo_raw = t_broad
+                    else:
+                        t_hi_raw = t_broad
         else:
             # Single-pass quantile analysis (no refinement)
             # Compute quantile curves for lower boundary
@@ -573,7 +669,11 @@ def run_boundary_qc(
             t_lo_raw = _aggregate_elbows_median(elbows_lower, config.min_quantile_agreement)
             t_hi_raw = _aggregate_elbows_median(elbows_upper, config.min_quantile_agreement)
 
-        # Store quantile elbows for diagnostics (use refined grid if available)
+        # Store quantile elbows for diagnostics.
+        # Use a diagnostic tol_grid capped at pileup_threshold for CDF-inverse
+        # computation so high-quantile entries don't inflate the diagnostic dict.
+        # Add extra low-quantile points for resolution below pileup_threshold.
+
         grid_for_diagnostics_lower = (
             quantile_grid_refined_lower
             if quantile_grid_refined_lower is not None
@@ -585,16 +685,54 @@ def run_boundary_qc(
             else quantile_grid_arr
         )
 
-        quantile_elbows_result = {
-            "lower": {
-                float(q): float(tol)
-                for q, tol in zip(grid_for_diagnostics_lower, tol_at_quantile_lower, strict=True)
-            },
-            "upper": {
-                float(q): float(tol)
-                for q, tol in zip(grid_for_diagnostics_upper, tol_at_quantile_upper, strict=True)
-            },
-        }
+        if config.refine_transition:
+            # Recompute CDF-inverse with a diagnostic tol_grid capped at
+            # pileup_threshold.  This clamps high-quantile tol values so
+            # the diagnostic dict doesn't report inflated tolerances from
+            # the extended grid.  Add extra low-quantile resolution so
+            # most entries fall below the pileup threshold for non-pileup data.
+            diag_tol_max = config.pileup_threshold
+            diag_n = max(11, config.n_tols // 4)
+            diag_tol_grid = np.linspace(config.tol_min, diag_tol_max, diag_n)
+            diag_low_q = np.linspace(0.0001, config.pileup_threshold, 30)
+            diag_grid_lo = np.sort(
+                np.unique(np.concatenate([grid_for_diagnostics_lower, diag_low_q]))
+            )
+            diag_grid_hi = np.sort(
+                np.unique(np.concatenate([grid_for_diagnostics_upper, diag_low_q]))
+            )
+            base_mass_lo = np.array([tail_mass(u_sorted, t) for t in diag_tol_grid])
+            base_mass_hi = np.array([tail_mass(one_minus_u_sorted, t) for t in diag_tol_grid])
+            tol_at_q_diag_lo = np.interp(diag_grid_lo, base_mass_lo, diag_tol_grid)
+            tol_at_q_diag_hi = np.interp(diag_grid_hi, base_mass_hi, diag_tol_grid)
+            quantile_elbows_result = {
+                "lower": {
+                    float(q): float(tol)
+                    for q, tol in zip(diag_grid_lo, tol_at_q_diag_lo, strict=True)
+                },
+                "upper": {
+                    float(q): float(tol)
+                    for q, tol in zip(diag_grid_hi, tol_at_q_diag_hi, strict=True)
+                },
+            }
+            # Update grid references for result
+            grid_for_diagnostics_lower = diag_grid_lo
+            grid_for_diagnostics_upper = diag_grid_hi
+        else:
+            quantile_elbows_result = {
+                "lower": {
+                    float(q): float(tol)
+                    for q, tol in zip(
+                        grid_for_diagnostics_lower, tol_at_quantile_lower, strict=True
+                    )
+                },
+                "upper": {
+                    float(q): float(tol)
+                    for q, tol in zip(
+                        grid_for_diagnostics_upper, tol_at_quantile_upper, strict=True
+                    )
+                },
+            }
     else:
         # Single-curve elbow detection (original method)
         # Skip tol=0 for elbow detection (avoid singularities)
@@ -675,6 +813,57 @@ def run_boundary_qc(
 
     lower_pileup_detected, t_lo_star = check_excess_mass(t_lo_raw, lower_mass_curve)
     upper_pileup_detected, t_hi_star = check_excess_mass(t_hi_raw, upper_mass_curve)
+
+    # Mechanism 2 — delta-function propagation (refine_transition only):
+    # For delta-function pileups (t_raw ≈ 0), check_excess_mass returns a very
+    # small t_star (first measurable tol point).  When the pileup fraction is
+    # large enough (mass(0) >> pileup_threshold) AND the quantile grid has
+    # sufficient resolution around the pileup fraction, override t_star with
+    # mass(0) — the exact pileup fraction.
+    if config.use_quantile_analysis and config.refine_transition:
+        for side, mass_curve_side, _refined_grid, t_raw, detected, t_star_val in [
+            (
+                "lower",
+                lower_mass_curve,
+                quantile_grid_refined_lower,
+                t_lo_raw,
+                lower_pileup_detected,
+                t_lo_star,
+            ),
+            (
+                "upper",
+                upper_mass_curve,
+                quantile_grid_refined_upper,
+                t_hi_raw,
+                upper_pileup_detected,
+                t_hi_star,
+            ),
+        ]:
+            if not (
+                detected
+                and t_star_val is not None
+                and t_star_val < config.pileup_threshold
+                and t_raw is not None
+                and t_raw < 1e-10
+                and mass_curve_side[0] > 2 * config.pileup_threshold
+            ):
+                continue
+            pileup_frac = float(mass_curve_side[0])
+            # Grid resolution guard: ensure the quantile grid has at least 2
+            # points near the pileup fraction for a reliable estimate.
+            # Use the initial (unrefined) grid when checking — the delta-continue
+            # in _refine_elbow_iteratively grows the grid for diagnostics, not
+            # to signal that M2 resolution is adequate.
+            grid_to_check = quantile_grid_arr
+            nearby = grid_to_check[
+                (grid_to_check > 0.5 * pileup_frac) & (grid_to_check < 1.5 * pileup_frac)
+            ]
+            if len(nearby) < 2:
+                continue
+            if side == "lower":
+                t_lo_star = pileup_frac
+            else:
+                t_hi_star = pileup_frac
 
     return BoundaryResult(
         lower_pileup_detected=bool(lower_pileup_detected),

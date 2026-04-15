@@ -222,7 +222,7 @@ class TestPlotCombinedFilterComparison:
             boundary_result=mock_boundary_result,
             bins=50,
         )
-        assert len(fig.axes) == 4  # 2x2 grid
+        assert len(fig.axes) == 8  # 4x2 grid (linear + log)
         plt.close(fig)
 
     def test_handles_no_interior_result(self, mock_boundary_result):
@@ -303,5 +303,5 @@ class TestPlotCombinedFilterComparison:
             bins=50,
         )
         assert fig is not None
-        assert len(fig.axes) == 4
+        assert len(fig.axes) == 8  # 4x2 grid (linear + log)
         plt.close(fig)

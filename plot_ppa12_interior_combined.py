@@ -18,7 +18,7 @@ output_dir = Path("figures")
 output_dir.mkdir(exist_ok=True)
 
 # List of datasets to process
-datasets = ["A_He", "e_dv_pp", "e_dv_ap", "np1"]
+datasets = ["A_He", "e_dv_pp", "e_dv_ap", "np1", "np2", "w_const"]
 
 # Configure boundary QC with progressive grid and quantile analysis
 boundary_config = BoundaryConfig(
