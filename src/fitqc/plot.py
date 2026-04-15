@@ -65,7 +65,7 @@ def plot_interior_diagnostics(result: InteriorResult, config: PlotConfig) -> Fig
     if result.spike_detected and result.spike_z_loc is not None:
         ax1.axvline(
             result.spike_z_loc,
-            color=cmap(0.8),
+            color="#ff7f0e",
             linestyle="--",
             linewidth=2,
             label=f"Spike at z={result.spike_z_loc:.4f}",
@@ -74,7 +74,7 @@ def plot_interior_diagnostics(result: InteriorResult, config: PlotConfig) -> Fig
 
     # Panel 2: Mass curve (linear scale)
     ax2 = axes[1]
-    ax2.plot(result.eps_grid, result.mass_curve, color=cmap(0.5), linewidth=2)
+    ax2.plot(result.eps_grid, result.mass_curve, color="#2166ac", linewidth=2)
     ax2.set_xlabel("epsilon")
     ax2.set_ylabel("P(z < epsilon)")
     ax2.set_title("Mass curve (linear scale)")
@@ -82,7 +82,7 @@ def plot_interior_diagnostics(result: InteriorResult, config: PlotConfig) -> Fig
 
     # Panel 3: Mass curve (log scale for epsilon)
     ax3 = axes[2]
-    ax3.semilogx(result.eps_grid, result.mass_curve, color=cmap(0.5), linewidth=2)
+    ax3.semilogx(result.eps_grid, result.mass_curve, color="#2166ac", linewidth=2)
     ax3.set_xlabel("epsilon (log scale)")
     ax3.set_ylabel("P(z < epsilon)")
     ax3.set_title("Mass curve (log scale)")
@@ -99,22 +99,22 @@ def plot_interior_diagnostics(result: InteriorResult, config: PlotConfig) -> Fig
 
         ax2.axvline(
             result.eps_star,
-            color=cmap(0.9),
+            color="#d62728",
             linestyle=":",
             linewidth=2,
             label=f"eps* = {result.eps_star:.2e}",
         )
-        ax2.scatter([result.eps_star], [mass_at_elbow], color=cmap(0.9), s=100, zorder=5)
+        ax2.scatter([result.eps_star], [mass_at_elbow], color="#d62728", s=100, zorder=5)
         ax2.legend(loc="lower right")
 
         ax3.axvline(
             result.eps_star,
-            color=cmap(0.9),
+            color="#d62728",
             linestyle=":",
             linewidth=2,
             label=f"eps* = {result.eps_star:.2e}",
         )
-        ax3.scatter([result.eps_star], [mass_at_elbow], color=cmap(0.9), s=100, zorder=5)
+        ax3.scatter([result.eps_star], [mass_at_elbow], color="#d62728", s=100, zorder=5)
         ax3.legend(loc="lower right")
 
     fig.tight_layout()
@@ -152,7 +152,7 @@ def plot_boundary_diagnostics(result: BoundaryResult, config: PlotConfig) -> Fig
 
     # Panel 1: Lower boundary mass curve
     ax1 = axes[0]
-    colors_lower = [cmap(norm(t)) for t in result.tol_grid]
+    colors_lower = [cmap(0.15 + 0.85 * norm(t)) for t in result.tol_grid]
     for i in range(len(result.tol_grid) - 1):
         ax1.plot(
             result.tol_grid[i : i + 2],
@@ -197,7 +197,7 @@ def plot_boundary_diagnostics(result: BoundaryResult, config: PlotConfig) -> Fig
 
     # Panel 2: Upper boundary mass curve
     ax2 = axes[1]
-    colors_upper = [cmap(norm(t)) for t in result.tol_grid]
+    colors_upper = [cmap(0.15 + 0.85 * norm(t)) for t in result.tol_grid]
     for i in range(len(result.tol_grid) - 1):
         ax2.plot(
             result.tol_grid[i : i + 2],
@@ -310,7 +310,10 @@ def plot_boundary_diagnostics(result: BoundaryResult, config: PlotConfig) -> Fig
     # The trade-off is that this approach requires explicit coordinate tuning,
     # but provides the most reliable cross-version behavior.
 
-    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    trunc_cmap = matplotlib.colors.LinearSegmentedColormap.from_list(
+        "trunc", [cmap(x) for x in np.linspace(0.15, 1.0, 256)]
+    )
+    sm = plt.cm.ScalarMappable(cmap=trunc_cmap, norm=norm)
     sm.set_array([])
     cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])  # [left, bottom, width, height]
     cbar = fig.colorbar(sm, cax=cbar_ax, orientation="vertical")
@@ -1639,6 +1642,7 @@ def _plot_boundary_quantile_elbows(result: BoundaryResult, config: PlotConfig) -
         ax=ax_lower,
         elbows=quantile_elbows.get("lower", {}),
         t_star=result.t_lo_star,
+        t_raw=result.t_lo_raw,
         boundary_name="Lower",
         cmap=cmap,
     )
@@ -1649,6 +1653,7 @@ def _plot_boundary_quantile_elbows(result: BoundaryResult, config: PlotConfig) -
         ax=ax_upper,
         elbows=quantile_elbows.get("upper", {}),
         t_star=result.t_hi_star,
+        t_raw=result.t_hi_raw,
         boundary_name="Upper",
         cmap=cmap,
     )
@@ -1663,8 +1668,13 @@ def _plot_boundary_panel(
     t_star: float | None,
     boundary_name: str,
     cmap,
+    t_raw: float | None = None,
 ) -> None:
-    """Plot a single boundary panel for quantile elbow visualization."""
+    """Plot a single boundary panel for quantile elbow visualization.
+
+    Shows the CDF-inverse curve (tolerance at each quantile), the Kneedle
+    elbow location, and horizontal lines for raw and validated thresholds.
+    """
     # Filter valid (non-None) elbows
     if elbows is None:
         elbows = {}
@@ -1682,7 +1692,7 @@ def _plot_boundary_panel(
             transform=ax.transAxes,
         )
         ax.set_xlabel("Quantile")
-        ax.set_ylabel("Tolerance (elbow threshold)")
+        ax.set_ylabel("Tolerance")
         ax.set_title(f"Quantile Elbow Analysis - {boundary_name} Boundary")
         return
 
@@ -1697,7 +1707,7 @@ def _plot_boundary_panel(
     # Plot line connecting points
     ax.plot(x_vals, y_vals, "k-", alpha=0.3, linewidth=1, zorder=1)
 
-    # Plot scatter with colors
+    # Plot scatter with colors — single legend entry for the curve
     for i, (q, tol) in enumerate(zip(x_vals, y_vals, strict=True)):
         ax.scatter(
             [q],
@@ -1705,31 +1715,52 @@ def _plot_boundary_panel(
             c=[colors[i]],
             s=100,
             zorder=2,
-            label=f"q={q:.3f}: tol={tol:.4f}",
+            label="tolerance at quantile" if i == 0 else None,
         )
 
-    # Mark t_star if available
+    # Elbow marker: interpolate the quantile position of t_raw on the curve
+    if t_raw is not None:
+        q_elbow = np.interp(t_raw, y_vals, x_vals)
+        ax.scatter(
+            [q_elbow],
+            [t_raw],
+            marker="D",
+            c="#d62728",
+            s=150,
+            zorder=3,
+            edgecolors="black",
+            linewidths=0.8,
+            label=f"Kneedle elbow = {t_raw:.4f}",
+        )
+
+    # Horizontal threshold lines
+    if t_raw is not None:
+        ax.axhline(
+            t_raw,
+            color="#2ca02c",
+            linestyle="--",
+            linewidth=1.5,
+            alpha=0.7,
+            label=f"raw threshold = {t_raw:.4f}",
+        )
+
     if t_star is not None:
+        validated_label = f"validated threshold = {t_star:.4f}"
+        if t_raw is None:
+            validated_label += " (raw unavailable)"
         ax.axhline(
             t_star,
             color="red",
             linestyle="--",
             linewidth=2,
             alpha=0.7,
-            label=f"t* (median) = {t_star:.4f}",
+            label=validated_label,
         )
 
     # Labels and title
     ax.set_xlabel("Quantile")
-    ax.set_ylabel("Tolerance (elbow threshold)")
+    ax.set_ylabel("Tolerance")
     ax.set_title(f"Quantile Elbow Analysis - {boundary_name} Boundary")
     ax.grid(True, alpha=0.3)
 
-    # Add legend (limit entries)
-    if len(sorted_quantiles) <= 8:
-        ax.legend(loc="best", fontsize=8)
-    else:
-        handles, labels = ax.get_legend_handles_labels()
-        t_star_idx = [i for i, label in enumerate(labels) if "t*" in label]
-        if t_star_idx:
-            ax.legend([handles[t_star_idx[0]]], [labels[t_star_idx[0]]], loc="best")
+    ax.legend(loc="best", fontsize=8)
