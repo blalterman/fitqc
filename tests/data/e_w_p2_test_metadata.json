@@ -13,7 +13,7 @@
     "x0": 0.0,
     "L": -75.0,
     "U": 75.0,
-    "expected_lower_stickiness": false,
+    "expected_lower_stickiness": true,
     "expected_upper_stickiness": true,
     "expected_interior_stickiness": true
   },

@@ -13,9 +13,9 @@
     "x0": null,
     "L": -200.0,
     "U": 200.0,
-    "expected_lower_stickiness": false,
-    "expected_upper_stickiness": false,
-    "expected_interior_stickiness": false
+    "expected_lower_stickiness": true,
+    "expected_upper_stickiness": true,
+    "expected_interior_stickiness": true
   },
   "notes": "Moment-based x0. Velocity component perpendicular to ecliptic."
 }

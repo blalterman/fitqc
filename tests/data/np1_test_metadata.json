@@ -13,8 +13,8 @@
     "x0": null,
     "L": 0.01,
     "U": 100.0,
-    "expected_lower_stickiness": false,
-    "expected_upper_stickiness": false,
+    "expected_lower_stickiness": true,
+    "expected_upper_stickiness": true,
     "expected_interior_stickiness": false
   },
   "notes": "Moment-based parameter - x0 varies per sample. Larger sample (1M) to capture rare boundary values."
