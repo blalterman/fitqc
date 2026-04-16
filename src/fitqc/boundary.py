@@ -679,39 +679,6 @@ def run_boundary_qc(
                 one_minus_u_sorted, tol_grid, quantile_grid_arr, max_iterations=5
             )
 
-            # Mechanism 1 — spread-pileup propagation:
-            # For concentrated (but non-delta) pileups the tolerance elbow is
-            # very small because the CDF-inverse at the pileup fraction maps
-            # to a tiny tolerance.  Override with half the quantile elbow
-            # (≈ pileup width, not fraction) so check_excess_mass's normal
-            # case validates instead of the delta branch.
-            # Guards:
-            #  - mass(0) < 1e-10: excludes delta functions where samples sit
-            #    at the exact boundary (those are handled by Mechanism 2)
-            #  - t < 0.2*q: excludes very narrow pileups where the tolerance
-            #    elbow IS a reasonable estimate of the pileup width
-            for _side_label, q_ref in [
-                ("lower", q_lo_elbow),
-                ("upper", q_hi_elbow),
-            ]:
-                t_val = t_lo_raw if _side_label == "lower" else t_hi_raw
-                mass_at_zero = (
-                    lower_mass_curve[0] if _side_label == "lower" else upper_mass_curve[0]
-                )
-                if (
-                    t_val is not None
-                    and t_val < config.pileup_threshold
-                    and q_ref is not None
-                    and q_ref > config.pileup_threshold
-                    and mass_at_zero < 1e-10
-                    and t_val < 0.2 * q_ref
-                ):
-                    override = max(q_ref / 2, config.pileup_threshold)
-                    if _side_label == "lower":
-                        t_lo_raw = override
-                    else:
-                        t_hi_raw = override
-
             # Mechanism 3 — broad-pileup fallback:
             # When the quantile analysis finds only a weak elbow (mass ratio
             # barely above excess_ratio), the pileup may extend well beyond

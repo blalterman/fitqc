@@ -1,17 +1,13 @@
 """Seam tests: override mechanisms and excess-mass validation.
 
-Covers seams 4-7 in the boundary QC pipeline:
-  4: M1 override (spread-pileup propagation)
+Covers seams 5-7 in the boundary QC pipeline:
   5: M3 override (broad-pileup fallback)
   6: _check_excess_mass validation
   7: M2 override (delta-function propagation)
 
-NOTE (2026-04-15): After all seam tests are passing, review whether M1/M2/M3
-overrides are introducing more problems than they solve. These mechanisms were
-added as escape hatches for edge cases but may be the root cause of boundary
-detection issues observed during PPA12 calibration. The seam tests here
-document current behavior — they should inform a follow-up decision about
-whether to simplify or remove these overrides.
+M1 (spread-pileup propagation) was removed after factorial analysis showed
+zero detection effect across all 24 parameter/side combinations (commit
+removing M1 from boundary.py).
 """
 
 import numpy as np
@@ -19,83 +15,6 @@ import pytest
 
 from fitqc import BoundaryConfig, run_boundary_qc
 from fitqc.boundary import _check_excess_mass
-
-# =============================================================================
-# Seam 4: M1 override (spread-pileup propagation)
-# =============================================================================
-
-
-class TestSeam4M1Override:
-    """M1 fires for diffuse pileups where tol_elbow is tiny but quantile_elbow
-    is above pileup_threshold."""
-
-    def _make_spread_pileup(self, rng, pileup_width=0.001, pileup_frac=0.05, n=10000):
-        """Create diffuse pileup: mass(0)≈0, high quantile elbow."""
-        n_pileup = int(n * pileup_frac)
-        n_bulk = n - n_pileup
-        # Diffuse pileup: NOT at exact zero, but uniformly spread in [eps, width]
-        x_pileup = rng.uniform(1e-8, pileup_width, n_pileup)
-        x_bulk = rng.uniform(pileup_width, 1.0, n_bulk)
-        return np.concatenate([x_pileup, x_bulk])
-
-    def test_m1_fires_for_spread_pileup(self, rng):
-        """Diffuse pileup with tiny tol_elbow should be overridden above threshold."""
-        x = self._make_spread_pileup(rng, pileup_width=0.001, pileup_frac=0.05)
-        config = BoundaryConfig(
-            use_quantile_analysis=True,
-            refine_transition=True,
-            grid_mode="progressive",
-        )
-        result = run_boundary_qc(x, 0.0, 1.0, config)
-        # M1 should propagate the quantile elbow → t_lo_raw >= pileup_threshold
-        if result.t_lo_raw is not None:
-            assert result.t_lo_raw >= config.pileup_threshold or result.t_lo_raw < 1e-10
-
-    def test_m1_blocked_for_delta_function(self, rng):
-        """Delta function (mass(0) > 1e-10) should NOT trigger M1."""
-        n = 10000
-        n_delta = 500
-        # Exact delta at zero: mass(0) >> 1e-10
-        x_delta = np.zeros(n_delta)
-        x_bulk = rng.uniform(0, 1, n - n_delta)
-        x = np.concatenate([x_delta, x_bulk])
-
-        config = BoundaryConfig(
-            use_quantile_analysis=True,
-            refine_transition=True,
-            grid_mode="progressive",
-        )
-        result = run_boundary_qc(x, 0.0, 1.0, config)
-        # Delta function → raw elbow should be ≈ 0 (M1 does not fire because
-        # mass(0) > 1e-10), but M2 may override t_lo_star
-        if result.t_lo_raw is not None:
-            # M1 guard: mass(0) < 1e-10 fails here, so M1 shouldn't override.
-            # Raw elbow from refinement should be near zero.
-            assert result.t_lo_raw < config.pileup_threshold
-
-    def test_m1_blocked_when_tol_near_quantile(self, rng):
-        """Wide pileup (tol_elbow >= pileup_threshold) → M1 guard #1 blocks."""
-        n = 10000
-        n_pileup = 1500  # 15% pileup — strong
-        # Wide spread [0, 0.05]: raw tol_elbow lands above pileup_threshold.
-        # Lower pileup_threshold so the raw elbow (typically ~0.004) is clearly
-        # above it, which means M1's first guard (t_val < threshold) blocks.
-        x_pileup = rng.uniform(0, 0.05, n_pileup)
-        x_bulk = rng.uniform(0.05, 1.0, n - n_pileup)
-        x = np.concatenate([x_pileup, x_bulk])
-
-        config = BoundaryConfig(
-            use_quantile_analysis=True,
-            refine_transition=True,
-            grid_mode="progressive",
-            pileup_threshold=0.002,
-        )
-        result = run_boundary_qc(x, 0.0, 1.0, config)
-        # Wide pileup → detection should fire, raw elbow above threshold
-        assert result.lower_pileup_detected
-        assert result.t_lo_raw is not None
-        assert result.t_lo_raw >= config.pileup_threshold
-
 
 # =============================================================================
 # Seam 5: M3 override (broad-pileup fallback)
@@ -166,7 +85,7 @@ class TestSeam5M3Override:
         result = run_boundary_qc(x, 0.0, 1.0, config)
         # With raw elbow near zero (< pileup_threshold), M3 guard triggers early exit
         if result.t_lo_raw is not None:
-            # Either raw is below threshold (M3 skipped) or M1 overrode it
+            # Raw is below threshold → M3 skipped
             pass  # M3 cannot run on sub-threshold raw elbows
 
 
