@@ -2039,7 +2039,7 @@ def _plot_boundary_panel(
     ax.legend(loc="best", fontsize=8)
 
 
-def _overview_overplot_hist(
+def _overview_merged_hist(
     ax,
     x_clean: np.ndarray,
     x_filtered: np.ndarray,
@@ -2048,33 +2048,65 @@ def _overview_overplot_hist(
     x0: float | None,
     L: float,
     U: float,
+    tols: np.ndarray,
     boundary_result: BoundaryResult,
     interior_result: InteriorResult | None,
+    config: PlotConfig,
 ) -> None:
-    """Single-panel raw (gray) + filtered (blue) overplot with cut markers."""
+    """Info-dense top-left panel merging three visualizations.
+
+    Layers (bottom to top):
+    1. Raw histogram as pale gray fill (context).
+    2. Tolerance sweep: stepfilled histograms at each sampled tolerance,
+       colored via the configured colormap with a colorbar (from
+       plot_histogram_tolerance_overlays_combined).
+    3. Pipeline-filtered histogram (actual asymmetric mask + interior cut)
+       as a thick black step-outline (no fill).
+    4. L/U/x0/t*/eps* vertical markers.
+
+    The tolerance sweep is symmetric (same t on both sides); the filtered
+    outline is the asymmetric pipeline mask the receiver actually applies.
+    Showing both together lets the viewer compare the two cuts at a glance.
+    """
     bin_edges = np.linspace(L, U, 101)
+
     if n_total > 0:
         ax.hist(
             x_clean,
             bins=bin_edges,
-            color="#808080",
-            alpha=0.6,
+            color="#cccccc",
+            alpha=0.55,
             edgecolor="none",
+            zorder=0,
             label=f"Raw (n={n_total})",
         )
+
+    plot_histogram_tolerance_overlays_combined(
+        x=x_clean,
+        L=L,
+        U=U,
+        tols=tols,
+        bins=100,
+        config=config,
+        x0=x0,
+        eps_star=interior_result.eps_star if interior_result is not None else None,
+        t_lo_star=None,
+        t_hi_star=None,
+        ax=ax,
+        with_colorbar=True,
+    )
+
     if n_kept > 0:
         ax.hist(
             x_filtered,
             bins=bin_edges,
-            color="#2166ac",
-            alpha=0.75,
-            edgecolor="none",
-            label=f"Filtered (kept {n_kept})",
+            histtype="step",
+            color="black",
+            linewidth=1.8,
+            zorder=100,
+            label=f"Pipeline filtered (kept {n_kept})",
         )
-    ax.set_yscale("log")
-    ax.set_xlabel("Parameter value")
-    ax.set_ylabel("Count")
-    ax.set_title("Raw vs filtered histogram")
+
     ax.axvline(L, color="black", lw=1)
     ax.axvline(U, color="black", lw=1)
     if x0 is not None:
@@ -2106,7 +2138,11 @@ def _overview_overplot_hist(
             alpha=0.7,
             label=f"eps*={interior_result.eps_star:.2e}",
         )
+
+    ax.set_title(f"Raw, tolerance sweep, pipeline-filtered (n={n_total})")
     ax.grid(True, alpha=0.3)
+    # Final legend call after all layers + markers so every labeled artist
+    # appears (the combined-overlay's internal legend is superseded here).
     ax.legend(loc="best", fontsize=7)
 
 
@@ -2604,8 +2640,19 @@ def plot_parameter_overview(
 
     # Row 1
     ax_r1c1 = fig.add_subplot(gs[0, 0])
-    _overview_overplot_hist(
-        ax_r1c1, x_clean, x_filtered, n_total, n_kept, x0, L, U, boundary_result, interior_result
+    _overview_merged_hist(
+        ax_r1c1,
+        x_clean,
+        x_filtered,
+        n_total,
+        n_kept,
+        x0,
+        L,
+        U,
+        tols,
+        boundary_result,
+        interior_result,
+        config,
     )
 
     ax_r1c2 = fig.add_subplot(gs[0, 1])
@@ -2626,22 +2673,10 @@ def plot_parameter_overview(
             fontsize=11,
         )
 
-    # Row 2
+    # Row 2 - R2C1 is reserved for U5 (interior mass curve). Until U5 lands
+    # it is explicitly left blank so the layout geometry is stable.
     ax_r2c1 = fig.add_subplot(gs[1, 0])
-    plot_histogram_tolerance_overlays_combined(
-        x=x_clean,
-        L=L,
-        U=U,
-        tols=tols,
-        bins=100,
-        config=config,
-        x0=x0,
-        eps_star=interior_result.eps_star if interior_result is not None else None,
-        t_lo_star=boundary_result.t_lo_star,
-        t_hi_star=boundary_result.t_hi_star,
-        ax=ax_r2c1,
-    )
-    ax_r2c1.set_title("Histogram at symmetric tolerance cuts")
+    ax_r2c1.axis("off")
 
     # ECDF lower and upper get full-size cells in row 2.
     ax_r2c2 = fig.add_subplot(gs[1, 1])
