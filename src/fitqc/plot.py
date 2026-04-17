@@ -586,6 +586,7 @@ def plot_ecdf_tolerance_overlays(
         ax_idx = 0
         ax = axes[ax_idx]
 
+        ecdf_y_in_view: list[float] = []
         for i, tol in enumerate(tols):
             # Filter data
             u_filt = u_clean[u_clean > tol]
@@ -603,6 +604,11 @@ def plot_ecdf_tolerance_overlays(
             # Plot ECDF
             ax.plot(u_sorted, ecdf_vals, color=color, alpha=alphas[i], linewidth=2, zorder=i)
 
+            in_view = (u_sorted >= 0) & (u_sorted <= 0.1)
+            if in_view.any():
+                ecdf_y_in_view.append(float(ecdf_vals[in_view].min()))
+                ecdf_y_in_view.append(float(ecdf_vals[in_view].max()))
+
         # Add reference line for uniform ECDF (y = x)
         ax.plot([0, 0.1], [0, 0.1], "k--", alpha=0.5, linewidth=1, label="Uniform (y=x)")
 
@@ -611,6 +617,12 @@ def plot_ecdf_tolerance_overlays(
         ax.set_title("ECDF near lower boundary")
         ax.set_xlim(0, 0.1)
         ax.grid(True, alpha=0.3)
+
+        if ecdf_y_in_view:
+            y_min = min(ecdf_y_in_view)
+            y_max = max(ecdf_y_in_view)
+            if y_max - y_min < 0.05:
+                ax.set_ylim(y_min - 0.005, y_max + 0.005)
 
         if t_lo_star is not None:
             ax.axvline(
@@ -627,6 +639,7 @@ def plot_ecdf_tolerance_overlays(
         ax_idx = 1 if side == "both" else 0
         ax = axes[ax_idx]
 
+        ecdf_y_in_view_upper: list[float] = []
         for i, tol in enumerate(tols):
             # Filter data
             u_filt = u_clean[u_clean < 1 - tol]
@@ -644,6 +657,11 @@ def plot_ecdf_tolerance_overlays(
             # Plot ECDF
             ax.plot(u_sorted, ecdf_vals, color=color, alpha=alphas[i], linewidth=2, zorder=i)
 
+            in_view = (u_sorted >= 0.9) & (u_sorted <= 1.0)
+            if in_view.any():
+                ecdf_y_in_view_upper.append(float(ecdf_vals[in_view].min()))
+                ecdf_y_in_view_upper.append(float(ecdf_vals[in_view].max()))
+
         # Add reference line for uniform ECDF (y = x)
         # For the upper boundary plot, the x range is [0.9, 1.0]
         # The reference line should still be y = x
@@ -654,6 +672,12 @@ def plot_ecdf_tolerance_overlays(
         ax.set_title("ECDF near upper boundary")
         ax.set_xlim(0.9, 1.0)
         ax.grid(True, alpha=0.3)
+
+        if ecdf_y_in_view_upper:
+            y_min = min(ecdf_y_in_view_upper)
+            y_max = max(ecdf_y_in_view_upper)
+            if y_max - y_min < 0.05:
+                ax.set_ylim(y_min - 0.005, y_max + 0.005)
 
         if t_hi_star is not None:
             ax.axvline(
