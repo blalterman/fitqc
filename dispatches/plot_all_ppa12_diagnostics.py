@@ -198,6 +198,42 @@ def process(name: str, pdf: PdfPages | None = None, ground_truth: dict | None = 
         plt.close(overview_fig)
         print(f"  appended overview page for {name} to {OVERVIEW_PDF.name}")
 
+    # e_w_a has a second interior spike at x0=-25 (CSV: "Two interior spikes
+    # confirmed: at or near 0 and at or near -25"). Re-run interior detection
+    # with x0=-25 and append a second overview page + two diagnostic PNGs.
+    if name == "e_w_a":
+        x0_secondary = -25.0
+        interior_secondary = run_interior_qc(
+            x, x0_secondary, L, U, InteriorConfig(use_quantile_analysis=True)
+        )
+        fig = plot_interior_diagnostics(interior_secondary, plot_config)
+        p = ds_out / f"{name}_interior_diagnostics_x0neg25.png"
+        fig.savefig(p, bbox_inches="tight")
+        plt.close(fig)
+        print(f"  saved {p.relative_to(REPO)}")
+
+        fig = plot_quantile_elbow_overlay(interior_secondary, plot_config)
+        p = ds_out / f"{name}_interior_elbows_x0neg25.png"
+        fig.savefig(p, bbox_inches="tight")
+        plt.close(fig)
+        print(f"  saved {p.relative_to(REPO)}")
+
+        if pdf is not None:
+            overview_fig = plot_parameter_overview(
+                param_name=f"{name} (x0=-25)",
+                x=x,
+                x0=x0_secondary,
+                L=L,
+                U=U,
+                interior_result=interior_secondary,
+                boundary_result=boundary_result,
+                config=plot_config,
+                tp_fn_status=tp_fn_status,
+            )
+            pdf.savefig(overview_fig, bbox_inches="tight")
+            plt.close(overview_fig)
+            print(f"  appended {name} x0=-25 overview page to {OVERVIEW_PDF.name}")
+
 
 def main() -> int:
     ground_truth = load_ground_truth()
