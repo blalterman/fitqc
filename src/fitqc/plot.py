@@ -518,10 +518,15 @@ def plot_ecdf_tolerance_overlays(
     side: Literal["lower", "upper", "both"] = "lower",
     use_alpha: bool = True,
     config: PlotConfig | None = None,
+    t_lo_star: float | None = None,
+    t_hi_star: float | None = None,
 ) -> Figure:
     """Plot ECDF near boundaries with tolerance-colored overlays.
 
     Shows how the empirical CDF changes as samples near boundaries are removed.
+
+    When ``t_lo_star`` or ``t_hi_star`` is supplied, a vertical red marker
+    is drawn at the detected cut position on the corresponding panel.
 
     Args:
         u: Normalized positions in [0, 1] where u = (x - L) / (U - L).
@@ -530,6 +535,8 @@ def plot_ecdf_tolerance_overlays(
         side: Which boundary to visualize ("lower", "upper", or "both").
         use_alpha: If True, use alpha gradient (base=1.0, top=0.3). If False, all layers use alpha=1.0 (fully opaque).
         config: PlotConfig for styling.
+        t_lo_star: Optional detected lower cut; drawn as a vertical marker.
+        t_hi_star: Optional detected upper cut; drawn as a vertical marker (placed at ``1 - t_hi_star``).
 
     Returns:
         Figure with ECDF curves colored by tolerance.
@@ -604,6 +611,15 @@ def plot_ecdf_tolerance_overlays(
         ax.set_title("ECDF near lower boundary")
         ax.set_xlim(0, 0.1)
         ax.grid(True, alpha=0.3)
+
+        if t_lo_star is not None:
+            ax.axvline(
+                t_lo_star,
+                color="red",
+                lw=2,
+                label=f"t_lo* = {t_lo_star:.4f}",
+            )
+
         ax.legend(loc="lower right")
 
     # Plot upper boundary ECDF
@@ -638,6 +654,15 @@ def plot_ecdf_tolerance_overlays(
         ax.set_title("ECDF near upper boundary")
         ax.set_xlim(0.9, 1.0)
         ax.grid(True, alpha=0.3)
+
+        if t_hi_star is not None:
+            ax.axvline(
+                1 - t_hi_star,
+                color="red",
+                lw=2,
+                label=f"t_hi* = {t_hi_star:.4f}",
+            )
+
         ax.legend(loc="lower right")
 
     # Apply tight_layout before adding colorbar
