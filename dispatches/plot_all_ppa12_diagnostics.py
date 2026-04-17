@@ -15,10 +15,14 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import numpy as np
 import pyarrow.parquet as pq
+from matplotlib.backends.backend_pdf import PdfPages
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from analyze_overrides import load_ground_truth
 
 from fitqc import (
     BoundaryConfig,
@@ -28,6 +32,7 @@ from fitqc import (
     plot_ecdf_tolerance_overlays,
     plot_histogram_tolerance_overlays,
     plot_interior_diagnostics,
+    plot_parameter_overview,
     plot_quantile_elbow_overlay,
     plot_quantile_spacing_overlays,
     run_boundary_qc,
@@ -37,6 +42,7 @@ from fitqc import (
 REPO = Path(__file__).resolve().parent.parent
 OUT = REPO / "figures"
 OUT.mkdir(exist_ok=True)
+OVERVIEW_PDF = OUT / "ppa12_overview.pdf"
 
 PARAMS = [
     "A_He",
@@ -62,7 +68,17 @@ plot_config = PlotConfig()
 tols = np.array([0.0, 0.005, 0.01, 0.02, 0.03, 0.05])
 
 
-def process(name: str) -> None:
+def _classify(detected: bool, expected: bool) -> str:
+    if expected and detected:
+        return "TP"
+    if expected and not detected:
+        return "FN"
+    if not expected and detected:
+        return "FP"
+    return "TN"
+
+
+def process(name: str, pdf: PdfPages | None = None, ground_truth: dict | None = None) -> None:
     print(f"=== {name} ===")
     parquet = REPO / "tests" / "data" / f"{name}_test_sample.parquet"
     meta_file = REPO / "tests" / "data" / f"{name}_test_metadata.json"
@@ -153,10 +169,42 @@ def process(name: str) -> None:
     for s in saved:
         print(f"  saved {s.relative_to(REPO)}")
 
+    if pdf is not None:
+        tp_fn_status = None
+        if ground_truth is not None and name in ground_truth:
+            gt = ground_truth[name]
+            lower_status = _classify(
+                boundary_result.lower_pileup_detected,
+                gt["expected_lower_stickiness"],
+            )
+            upper_status = _classify(
+                boundary_result.upper_pileup_detected,
+                gt["expected_upper_stickiness"],
+            )
+            tp_fn_status = f"lower: {lower_status} | upper: {upper_status}"
+
+        overview_fig = plot_parameter_overview(
+            param_name=name,
+            x=x,
+            x0=x0,
+            L=L,
+            U=U,
+            interior_result=interior_result,
+            boundary_result=boundary_result,
+            config=plot_config,
+            tp_fn_status=tp_fn_status,
+        )
+        pdf.savefig(overview_fig, bbox_inches="tight")
+        plt.close(overview_fig)
+        print(f"  appended overview page for {name} to {OVERVIEW_PDF.name}")
+
 
 def main() -> int:
-    for name in PARAMS:
-        process(name)
+    ground_truth = load_ground_truth()
+    with PdfPages(OVERVIEW_PDF) as pdf:
+        for name in PARAMS:
+            process(name, pdf=pdf, ground_truth=ground_truth)
+    print(f"\nWrote {OVERVIEW_PDF.relative_to(REPO)}")
     return 0
 
 
