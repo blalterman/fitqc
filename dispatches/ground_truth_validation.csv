@@ -8,6 +8,6 @@ vx,-1200,-200,,-1200,-200,None,"Upper stickiness extends ~5-12 km/s inward from 
 vy,-200,200,0,-200,200,1,Interior spike at vy=0 confirmed on closer inspection of overview histogram.
 vz,-200,200,,-200,200,0,My guess is the |x| < 1e-1 is where the interior spike may be
 w_const,5,150,,5,150,None,
-e_w_p1,-75,75,0,-75,75,0,My guess is the |x| < 1e-2 is where the interior spike may be
+e_w_p1,-75,75,0,-75,75,0,"Interior spike at x0=0 confirmed by interior.py (2026-04-17): spike_z_loc=0.005, eps_star=1.33e-9. Prior 'my guess' of |x| < 1e-2 in original x-space corresponds to this detection."
 e_w_p2,-75,75,0,-75,75,0,My guess is the |x| < 2e-1 is where the interior spike may be
 e_w_a,-60,200,0,-60,200,2,"Two interior spikes confirmed: at or near 0 and at or near -25."
