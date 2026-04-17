@@ -2070,17 +2070,6 @@ def _overview_merged_hist(
     """
     bin_edges = np.linspace(L, U, 101)
 
-    if n_total > 0:
-        ax.hist(
-            x_clean,
-            bins=bin_edges,
-            color="#cccccc",
-            alpha=0.55,
-            edgecolor="none",
-            zorder=0,
-            label=f"Raw (n={n_total})",
-        )
-
     plot_histogram_tolerance_overlays_combined(
         x=x_clean,
         L=L,
@@ -2096,15 +2085,21 @@ def _overview_merged_hist(
         with_colorbar=True,
     )
 
+    # Gray semi-transparent overlay on the pipeline-filtered (retained)
+    # region: the tolerance sweep below shows what each tolerance layer
+    # looks like in full color; the gray overlay highlights what the
+    # pipeline actually keeps. Combined with the vertical cut markers
+    # below, this lets the viewer see at a glance which region is
+    # retained and which is discarded.
     if n_kept > 0:
         ax.hist(
             x_filtered,
             bins=bin_edges,
-            histtype="step",
-            color="black",
-            linewidth=1.8,
+            color="#555555",
+            alpha=0.45,
+            edgecolor="none",
             zorder=100,
-            label=f"Pipeline filtered (kept {n_kept})",
+            label=f"Pipeline filtered (kept {n_kept} of {n_total})",
         )
 
     ax.axvline(L, color="black", lw=1)
