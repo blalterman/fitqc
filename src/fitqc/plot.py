@@ -2146,11 +2146,16 @@ def _overview_merged_hist(
     ax.legend(loc="best", fontsize=7)
 
 
-def _overview_boundary_twinx(ax_lower, result: BoundaryResult) -> None:
+def _overview_boundary_twinx(ax_lower, result: BoundaryResult, config: PlotConfig) -> None:
     """Single-panel lower + upper boundary mass curves via twinx.
 
-    Lower curve on the main axis, upper curve on a twin right-side axis,
-    both zoomed to the pileup region per the B2 logic.
+    Each side's mass curve is drawn segment-by-segment with color
+    encoding the tolerance value at that segment - matching the
+    standalone plot_boundary_diagnostics. The twinx separation lets
+    each side keep its own y-scale (so neither is visually compressed
+    when the magnitudes differ). Side identity is encoded by line
+    style: solid for lower (left axis), dashed for upper (right axis).
+    A shared tolerance colorbar is appended via make_axes_locatable.
     """
     tol_grid = result.tol_grid
     if len(tol_grid) == 0:
@@ -2168,16 +2173,26 @@ def _overview_boundary_twinx(ax_lower, result: BoundaryResult) -> None:
 
     ax_upper = ax_lower.twinx()
 
-    lower_color = "#1f77b4"
-    upper_color = "#d62728"
+    cmap = plt.get_cmap(config.cmap)
+    norm = Normalize(vmin=tol_grid[0], vmax=tol_grid[-1])
+    seg_colors = [cmap(0.15 + 0.85 * norm(t)) for t in tol_grid]
 
-    ax_lower.plot(
-        tol_grid,
-        result.lower_mass_curve,
-        color=lower_color,
-        linewidth=2,
-        label="Lower: P(u < tol)",
-    )
+    for i in range(len(tol_grid) - 1):
+        ax_lower.plot(
+            tol_grid[i : i + 2],
+            result.lower_mass_curve[i : i + 2],
+            color=seg_colors[i],
+            linestyle="-",
+            linewidth=2,
+        )
+        ax_upper.plot(
+            tol_grid[i : i + 2],
+            result.upper_mass_curve[i : i + 2],
+            color=seg_colors[i],
+            linestyle="--",
+            linewidth=2,
+        )
+
     ax_lower.plot(
         tol_grid,
         tol_grid,
@@ -2186,39 +2201,46 @@ def _overview_boundary_twinx(ax_lower, result: BoundaryResult) -> None:
         linewidth=1,
         label="Uniform (P = tol)",
     )
-    ax_upper.plot(
-        tol_grid,
-        result.upper_mass_curve,
-        color=upper_color,
-        linewidth=2,
-        linestyle="--",
-        label="Upper: P(u > 1-tol)",
-    )
+
+    # Side-identity legend proxies (don't display the per-segment colored lines).
+    from matplotlib.lines import Line2D
+
+    legend_proxies = [
+        Line2D([], [], color="black", linestyle="-", linewidth=2, label="Lower P(u<tol) (solid)"),
+        Line2D(
+            [],
+            [],
+            color="black",
+            linestyle="--",
+            linewidth=2,
+            label="Upper P(u>1-tol) (dashed)",
+        ),
+    ]
 
     ax_lower.set_xlabel("Tolerance (tol)")
-    ax_lower.set_ylabel("Lower P(u < tol)", color=lower_color)
-    ax_upper.set_ylabel("Upper P(u > 1-tol)", color=upper_color)
-    ax_lower.tick_params(axis="y", labelcolor=lower_color)
-    ax_upper.tick_params(axis="y", labelcolor=upper_color)
-    ax_lower.set_title("Boundary mass curves (twinx)")
+    ax_lower.set_ylabel("Lower P(u < tol)")
+    ax_upper.set_ylabel("Upper P(u > 1-tol)")
+    ax_lower.set_title("Boundary mass curves (color = tolerance, style = side)")
     ax_lower.grid(True, alpha=0.3)
 
     if result.t_lo_star is not None:
-        ax_lower.axvline(
+        line_t_lo = ax_lower.axvline(
             result.t_lo_star,
-            color=lower_color,
+            color="red",
             linestyle=":",
             linewidth=2,
             label=f"t_lo* = {result.t_lo_star:.4f}",
         )
+        legend_proxies.append(line_t_lo)
     if result.t_hi_star is not None:
-        ax_upper.axvline(
+        line_t_hi = ax_upper.axvline(
             result.t_hi_star,
-            color=upper_color,
-            linestyle=":",
+            color="red",
+            linestyle="-.",
             linewidth=2,
             label=f"t_hi* = {result.t_hi_star:.4f}",
         )
+        legend_proxies.append(line_t_hi)
 
     t_lo_for_zoom = result.t_lo_star if result.t_lo_star is not None else 0.0
     t_hi_for_zoom = result.t_hi_star if result.t_hi_star is not None else 0.0
@@ -2235,14 +2257,30 @@ def _overview_boundary_twinx(ax_lower, result: BoundaryResult) -> None:
             ax_lower.set_ylim(0, y_max_lower)
             ax_upper.set_ylim(0, y_max_upper)
 
-    lines_lower, labels_lower = ax_lower.get_legend_handles_labels()
-    lines_upper, labels_upper = ax_upper.get_legend_handles_labels()
-    ax_lower.legend(
-        lines_lower + lines_upper,
-        labels_lower + labels_upper,
-        loc="best",
-        fontsize=7,
-    )
+    handles_uniform, labels_uniform = ax_lower.get_legend_handles_labels()
+    # Merge style proxies with uniform-reference handle, dedup by label.
+    seen_labels = set()
+    merged_handles = []
+    merged_labels = []
+    for h, label in [(p, p.get_label()) for p in legend_proxies] + list(
+        zip(handles_uniform, labels_uniform, strict=True)
+    ):
+        if label in seen_labels:
+            continue
+        seen_labels.add(label)
+        merged_handles.append(h)
+        merged_labels.append(label)
+    ax_lower.legend(merged_handles, merged_labels, loc="best", fontsize=7)
+
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+    divider = make_axes_locatable(ax_lower)
+    cax = divider.append_axes("right", size="3%", pad=0.6)
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    cbar = ax_lower.figure.colorbar(sm, cax=cax, orientation="vertical")
+    cbar.set_label("Tolerance")
+    cbar.ax.tick_params(labelsize=7)
 
 
 def _overview_interior_zhist(ax, interior_result: InteriorResult) -> None:
@@ -2656,7 +2694,7 @@ def plot_parameter_overview(
     )
 
     ax_r1c2 = fig.add_subplot(gs[0, 1])
-    _overview_boundary_twinx(ax_r1c2, boundary_result)
+    _overview_boundary_twinx(ax_r1c2, boundary_result, config)
 
     ax_r1c3 = fig.add_subplot(gs[0, 2])
     if interior_result is not None:

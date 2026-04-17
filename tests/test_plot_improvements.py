@@ -192,13 +192,17 @@ def test_histogram_tolerance_overlays_combined_accepts_external_ax():
 
 
 def test_parameter_overview_smoke():
-    """T3: 3x3 overview renders for both interior_result paths.
+    """U3: 3x3 overview renders for both interior_result paths.
 
-    Axes count depends on whether interior quantile elbows are populated:
-    - Interior with quantile_elbows: 3x3 (=9) + boundary twinx (+1) +
-      combined-elbows twinx (+1) + embedded hist colorbar (+1) = 12.
-    - Interior without quantile_elbows (the _mock_interior_result default)
-      or no interior at all: 11 (the combined-elbows twinx is skipped).
+    Axes count after the U2/U3 changes:
+    - 9 grid cells
+    - boundary mass twinx (+1)
+    - boundary mass tolerance colorbar (+1)
+    - merged top-left panel colorbar (+1)
+    Plus when interior quantile elbows are populated:
+    - combined-elbows twinx (+1)
+
+    So: 12 axes without interior elbows, 13 with.
     """
     rng = np.random.default_rng(3)
     L, U = 0.0, 1.0
@@ -219,7 +223,7 @@ def test_parameter_overview_smoke():
         config=PlotConfig(),
         tp_fn_status="lower: TP | upper: TP",
     )
-    assert len(fig_mock_interior.axes) == 11
+    assert len(fig_mock_interior.axes) == 12
     plt.close(fig_mock_interior)
 
     fig_none = plot_parameter_overview(
@@ -232,7 +236,7 @@ def test_parameter_overview_smoke():
         boundary_result=br,
         config=PlotConfig(),
     )
-    assert len(fig_none.axes) == 11
+    assert len(fig_none.axes) == 12
     plt.close(fig_none)
 
     # Interior with quantile_elbows populated -> combined-elbows twinx adds one axes
@@ -261,5 +265,5 @@ def test_parameter_overview_smoke():
         boundary_result=br_with_elbows,
         config=PlotConfig(),
     )
-    assert len(fig_full.axes) == 12
+    assert len(fig_full.axes) == 13
     plt.close(fig_full)
