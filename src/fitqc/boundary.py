@@ -436,6 +436,10 @@ class BoundaryResult:
     upper_mass_curve: np.ndarray
     #: Quantile elbow data (only with use_quantile_analysis=True).
     quantile_elbows: dict[str, dict[float, float | None]] | None = None
+    #: Passive record of the BoundaryConfig.pileup_threshold used to produce
+    #: this result. Plotters read it to set zoom ranges without coupling to
+    #: BoundaryConfig. Default matches BoundaryConfig default (0.005).
+    pileup_threshold: float = 0.005
     #: Refined quantile grid for lower boundary (only with refine_transition=True).
     quantile_grid_refined_lower: np.ndarray | None = None
     #: Refined quantile grid for upper boundary (only with refine_transition=True).
@@ -666,6 +670,7 @@ def run_boundary_qc(
                 lower_mass_curve=np.array([]),
                 upper_mass_curve=np.array([]),
                 quantile_elbows=None,
+                pileup_threshold=config.pileup_threshold,
             )
 
     # Build tolerance grid based on grid_mode
@@ -945,6 +950,7 @@ def run_boundary_qc(
         lower_mass_curve=lower_mass_curve,
         upper_mass_curve=upper_mass_curve,
         quantile_elbows=quantile_elbows_result,
+        pileup_threshold=config.pileup_threshold,
         quantile_grid_refined_lower=quantile_grid_refined_lower,
         quantile_grid_refined_upper=quantile_grid_refined_upper,
         kneedle_elbows_lower=kneedle_elbows_lower,
