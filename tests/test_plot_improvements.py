@@ -167,15 +167,28 @@ def test_histogram_tolerance_overlays_combined_single_panel():
 
 
 def test_histogram_tolerance_overlays_combined_accepts_external_ax():
-    """S3: passing an existing Axes skips colorbar creation and draws on that axes."""
-    fig, ax = plt.subplots(1, 1)
+    """S3/T2: passing an existing Axes draws on that axes.
+
+    With with_colorbar=True (default) a colorbar axes is appended next to
+    the main axes via make_axes_locatable. With with_colorbar=False only
+    the caller's axes is used.
+    """
     rng = np.random.default_rng(6)
     x = rng.uniform(0, 1, size=500)
+
+    fig, ax = plt.subplots(1, 1)
     returned_fig = plot_histogram_tolerance_overlays_combined(x=x, L=0.0, U=1.0, bins=30, ax=ax)
     assert returned_fig is fig
-    # Only the caller's axes — no colorbar was added
-    assert len(fig.axes) == 1
+    # Default with_colorbar=True: main axes + colorbar axes = 2
+    assert len(fig.axes) == 2
     plt.close(fig)
+
+    fig2, ax2 = plt.subplots(1, 1)
+    plot_histogram_tolerance_overlays_combined(
+        x=x, L=0.0, U=1.0, bins=30, ax=ax2, with_colorbar=False
+    )
+    assert len(fig2.axes) == 1
+    plt.close(fig2)
 
 
 def test_parameter_overview_smoke():
@@ -203,8 +216,9 @@ def test_parameter_overview_smoke():
         config=PlotConfig(),
         tp_fn_status="lower: TP | upper: TP",
     )
-    # 3x3 (=9) + twinx (+1) + ECDF sub-gridspec (+1) = 11
-    assert len(fig_populated.axes) == 11
+    # 3x3 (=9) + twinx on boundary (+1) + ECDF sub-gridspec (+1) + combined
+    # hist overlay colorbar (+1) = 12
+    assert len(fig_populated.axes) == 12
     plt.close(fig_populated)
 
     fig_none = plot_parameter_overview(
@@ -218,5 +232,5 @@ def test_parameter_overview_smoke():
         config=PlotConfig(),
     )
     # Same axis count - interior panels render placeholder text but still occupy their Axes slots.
-    assert len(fig_none.axes) == 11
+    assert len(fig_none.axes) == 12
     plt.close(fig_none)

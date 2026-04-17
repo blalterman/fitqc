@@ -912,6 +912,7 @@ def plot_histogram_tolerance_overlays_combined(
     t_lo_star: float | None = None,
     t_hi_star: float | None = None,
     ax: "plt.Axes | None" = None,
+    with_colorbar: bool = True,
 ) -> Figure:
     """Single-panel histogram overlays with symmetric tolerance cuts.
 
@@ -922,7 +923,7 @@ def plot_histogram_tolerance_overlays_combined(
     Colored by tolerance via the configured colormap with a vertical
     colorbar. Log-y. When ``t_lo_star`` / ``t_hi_star`` are supplied,
     vertical red markers are drawn at the detected cut positions on the
-    same panel.
+    same panel (legend laid out in two columns).
 
     When ``x0`` and ``eps_star`` are supplied, samples within the interior
     stickiness cut are removed first (matches the two-panel version's
@@ -935,9 +936,14 @@ def plot_histogram_tolerance_overlays_combined(
             ``plot_histogram_tolerance_overlays``.
         x0, eps_star: optional interior cut.
         t_lo_star, t_hi_star: optional detected cut markers.
-        ax: optional existing Axes to draw on. When supplied, colorbar is
-            attached to ``ax.figure`` and the returned Figure is
-            ``ax.figure``. When None, a new Figure is created.
+        ax: optional existing Axes to draw on. When supplied, the returned
+            Figure is ``ax.figure``.
+        with_colorbar: if True (default), a tolerance colorbar is attached.
+            When ``ax`` is None, the colorbar is placed at the figure's
+            right edge. When ``ax`` is supplied, the colorbar is appended
+            next to ``ax`` via ``make_axes_locatable`` so the surrounding
+            gridspec layout is not disrupted. Set to False to skip the
+            colorbar entirely (e.g., when the caller manages its own).
 
     Returns:
         The Figure containing (or owning) the drawn Axes.
@@ -1005,16 +1011,24 @@ def plot_histogram_tolerance_overlays_combined(
             label=f"t_hi* = {t_hi_star:.4f}",
         )
     if t_lo_star is not None or t_hi_star is not None:
-        ax.legend(loc="upper right", fontsize=8)
+        ax.legend(loc="best", fontsize=8, ncol=2)
 
-    if own_fig:
-        fig.tight_layout()
+    if with_colorbar:
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
         sm.set_array([])
-        cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
-        cbar = fig.colorbar(sm, cax=cbar_ax, orientation="vertical")
-        cbar.set_label("Tolerance")
-        fig.subplots_adjust(right=0.9)
+        if own_fig:
+            fig.tight_layout()
+            cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+            cbar = fig.colorbar(sm, cax=cbar_ax, orientation="vertical")
+            cbar.set_label("Tolerance")
+            fig.subplots_adjust(right=0.9)
+        else:
+            from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes("right", size="3%", pad=0.05)
+            cbar = fig.colorbar(sm, cax=cax, orientation="vertical")
+            cbar.set_label("Tolerance")
 
     return fig
 
