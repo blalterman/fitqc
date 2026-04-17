@@ -19,6 +19,7 @@ from fitqc.plot import (
     plot_boundary_diagnostics,
     plot_ecdf_tolerance_overlays,
     plot_histogram_tolerance_overlays,
+    plot_histogram_tolerance_overlays_combined,
     plot_interior_diagnostics,
     plot_parameter_overview,
 )
@@ -122,6 +123,58 @@ def test_interior_diagnostics_uses_symlog_on_z():
     result = _mock_interior_result()
     fig = plot_interior_diagnostics(result, PlotConfig())
     assert fig.axes[0].get_yscale() == "symlog"
+    plt.close(fig)
+
+
+def test_interior_diagnostics_overplots_before_after_cut():
+    """S2: z-histogram panel shows a gray 'before' and a colored 'after' bar set."""
+    # eps_star at ~0.05 so about half the 100 bins (0..1) are above the cut
+    result = _mock_interior_result(spike=True, eps_star=0.05)
+    fig = plot_interior_diagnostics(result, PlotConfig())
+    ax1 = fig.axes[0]
+    bar_artists = [patch for patch in ax1.containers]
+    # Expect two bar containers: raw (gray) + after-cut (blue)
+    assert len(bar_artists) == 2, f"expected two bar containers, got {len(bar_artists)}"
+    plt.close(fig)
+
+
+def test_histogram_tolerance_overlays_combined_single_panel():
+    """S3: combined overlay returns a single-panel figure with log-y + markers."""
+    rng = np.random.default_rng(5)
+    x = np.concatenate([rng.uniform(0, 1, size=900), np.zeros(50), np.ones(50)])
+    fig = plot_histogram_tolerance_overlays_combined(
+        x=x,
+        L=0.0,
+        U=1.0,
+        bins=50,
+        t_lo_star=0.02,
+        t_hi_star=0.03,
+    )
+    # Exactly one main panel (+ one colorbar axes attached by own_fig path)
+    main_axes = [ax for ax in fig.axes if ax.get_ylabel() == "Count"]
+    assert len(main_axes) == 1, f"expected one main panel, got {len(main_axes)}"
+    ax = main_axes[0]
+    assert ax.get_yscale() == "log"
+    # Both t* markers drawn
+    axvline_xs = [
+        line.get_xdata()[0]
+        for line in ax.lines
+        if len(line.get_xdata()) == 2 and line.get_xdata()[0] == line.get_xdata()[1]
+    ]
+    assert any(abs(x - 0.02) < 1e-9 for x in axvline_xs)
+    assert any(abs(x - (1.0 - 0.03)) < 1e-9 for x in axvline_xs)
+    plt.close(fig)
+
+
+def test_histogram_tolerance_overlays_combined_accepts_external_ax():
+    """S3: passing an existing Axes skips colorbar creation and draws on that axes."""
+    fig, ax = plt.subplots(1, 1)
+    rng = np.random.default_rng(6)
+    x = rng.uniform(0, 1, size=500)
+    returned_fig = plot_histogram_tolerance_overlays_combined(x=x, L=0.0, U=1.0, bins=30, ax=ax)
+    assert returned_fig is fig
+    # Only the caller's axes — no colorbar was added
+    assert len(fig.axes) == 1
     plt.close(fig)
 
 
