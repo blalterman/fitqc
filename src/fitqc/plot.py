@@ -2292,10 +2292,23 @@ def _overview_ecdf_side(
     t_star: float | None,
     cmap,
 ) -> None:
-    """Simplified ECDF panel with tolerance-colored overlays + t* marker."""
+    """Simplified ECDF panel with tolerance-colored overlays + t* marker.
+
+    Y-range adapts to the ECDF values actually visible within the
+    narrow x-window (lower: [0, 0.1]; upper: [0.9, 1.0]). Without this
+    the panel defaults to a full (0, 1) y-range and the curves collapse
+    into a near-horizontal line at the top of the panel.
+    """
     u = u[np.isfinite(u)]
     norm = Normalize(vmin=tols[0], vmax=tols[-1])
     alphas = np.linspace(1.0, 0.3, len(tols))
+
+    if side == "lower":
+        xlim = (0.0, 0.1)
+    else:
+        xlim = (0.9, 1.0)
+
+    ecdf_y_in_view: list[float] = []
     for i, tol in enumerate(tols):
         if side == "lower":
             u_filt = u[u > tol]
@@ -2306,22 +2319,40 @@ def _overview_ecdf_side(
         u_sorted = np.sort(u_filt)
         ecdf_vals = np.arange(1, len(u_sorted) + 1) / len(u_sorted)
         ax.plot(u_sorted, ecdf_vals, color=cmap(norm(tol)), alpha=alphas[i], linewidth=1.5)
+        in_view = (u_sorted >= xlim[0]) & (u_sorted <= xlim[1])
+        if in_view.any():
+            ecdf_y_in_view.append(float(ecdf_vals[in_view].min()))
+            ecdf_y_in_view.append(float(ecdf_vals[in_view].max()))
+
     if side == "lower":
         ax.plot([0, 0.1], [0, 0.1], "k--", alpha=0.5, linewidth=1)
-        ax.set_xlim(0, 0.1)
+        ax.set_xlim(*xlim)
         ax.set_xlabel("u")
         ax.set_title("ECDF near lower")
         if t_star is not None:
             ax.axvline(t_star, color="red", lw=2, label=f"t_lo*={t_star:.4f}")
-            ax.legend(loc="best", fontsize=7)
     else:
         ax.plot([0.9, 1.0], [0.9, 1.0], "k--", alpha=0.5, linewidth=1)
-        ax.set_xlim(0.9, 1.0)
+        ax.set_xlim(*xlim)
         ax.set_xlabel("u")
         ax.set_title("ECDF near upper")
         if t_star is not None:
             ax.axvline(1 - t_star, color="red", lw=2, label=f"t_hi*={t_star:.4f}")
-            ax.legend(loc="best", fontsize=7)
+
+    if ecdf_y_in_view:
+        y_min = min(ecdf_y_in_view)
+        y_max = max(ecdf_y_in_view)
+        y_range = y_max - y_min
+        # Always adapt; use a tight bracket when range is tiny, otherwise
+        # pad by 5% of the observed range.
+        if y_range < 0.05:
+            ax.set_ylim(y_min - 0.005, y_max + 0.005)
+        else:
+            pad = 0.05 * y_range
+            ax.set_ylim(max(0.0, y_min - pad), min(1.0, y_max + pad))
+
+    if t_star is not None:
+        ax.legend(loc="best", fontsize=7)
     ax.set_ylabel("ECDF")
     ax.grid(True, alpha=0.3)
 
