@@ -898,6 +898,127 @@ def plot_histogram_tolerance_overlays(
     return fig
 
 
+def plot_histogram_tolerance_overlays_combined(
+    x: np.ndarray,
+    L: float,
+    U: float,
+    tols: np.ndarray | None = None,
+    n_tols: int = 11,
+    bins: int = 100,
+    use_alpha: bool = True,
+    config: PlotConfig | None = None,
+    x0: float | None = None,
+    eps_star: float | None = None,
+    t_lo_star: float | None = None,
+    t_hi_star: float | None = None,
+    ax: "plt.Axes | None" = None,
+) -> Figure:
+    """Single-panel histogram overlays with symmetric tolerance cuts.
+
+    For each tolerance ``t``, shows the histogram of samples that satisfy
+    BOTH lower and upper cuts simultaneously:
+        ``L + t*(U-L) <= x <= U - t*(U-L)``
+
+    Colored by tolerance via the configured colormap with a vertical
+    colorbar. Log-y. When ``t_lo_star`` / ``t_hi_star`` are supplied,
+    vertical red markers are drawn at the detected cut positions on the
+    same panel.
+
+    When ``x0`` and ``eps_star`` are supplied, samples within the interior
+    stickiness cut are removed first (matches the two-panel version's
+    semantics).
+
+    Args:
+        x, L, U: sample array and bounds.
+        tols: tolerance grid. Defaults to ``linspace(0, 0.05, n_tols)``.
+        n_tols, bins, use_alpha, config: as for
+            ``plot_histogram_tolerance_overlays``.
+        x0, eps_star: optional interior cut.
+        t_lo_star, t_hi_star: optional detected cut markers.
+        ax: optional existing Axes to draw on. When supplied, colorbar is
+            attached to ``ax.figure`` and the returned Figure is
+            ``ax.figure``. When None, a new Figure is created.
+
+    Returns:
+        The Figure containing (or owning) the drawn Axes.
+    """
+    if L >= U:
+        raise ValueError(f"L must be less than U, got L={L}, U={U}")
+
+    if config is None:
+        config = PlotConfig()
+
+    if tols is None:
+        tols = np.linspace(0, 0.05, n_tols)
+
+    x = x[np.isfinite(x)]
+    if x0 is not None and eps_star is not None and len(x) > 0:
+        z = compute_z(x, x0, L, U)
+        x = x[z >= eps_star]
+
+    if ax is None:
+        fig, ax = plt.subplots(1, 1, figsize=config.figsize_tolerance, dpi=config.dpi)
+        own_fig = True
+    else:
+        fig = ax.figure
+        own_fig = False
+
+    cmap = plt.get_cmap(config.cmap)
+    norm = Normalize(vmin=tols[0], vmax=tols[-1])
+    bin_edges = np.linspace(L, U, bins + 1)
+    alphas = np.linspace(1.0, 0.3, len(tols)) if use_alpha else np.ones(len(tols))
+    colors = [cmap(norm(t)) for t in tols]
+
+    for i, tol in enumerate(tols):
+        margin = tol * (U - L)
+        x_filt = x[(x >= L + margin) & (x <= U - margin)]
+        if len(x_filt) == 0:
+            continue
+        ax.hist(
+            x_filt,
+            bins=bin_edges,
+            histtype="stepfilled",
+            alpha=alphas[i],
+            color=colors[i],
+            zorder=i,
+        )
+
+    ax.set_xlabel("Parameter value")
+    ax.set_ylabel("Count")
+    ax.set_title("Histogram at increasing symmetric tolerance cuts")
+    ax.set_yscale("log")
+    ax.grid(True, alpha=0.3)
+
+    if t_lo_star is not None:
+        ax.axvline(
+            L + t_lo_star * (U - L),
+            color="red",
+            lw=2,
+            label=f"t_lo* = {t_lo_star:.4f}",
+        )
+    if t_hi_star is not None:
+        ax.axvline(
+            U - t_hi_star * (U - L),
+            color="red",
+            lw=2,
+            ls="--",
+            label=f"t_hi* = {t_hi_star:.4f}",
+        )
+    if t_lo_star is not None or t_hi_star is not None:
+        ax.legend(loc="upper right", fontsize=8)
+
+    if own_fig:
+        fig.tight_layout()
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array([])
+        cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+        cbar = fig.colorbar(sm, cax=cbar_ax, orientation="vertical")
+        cbar.set_label("Tolerance")
+        fig.subplots_adjust(right=0.9)
+
+    return fig
+
+
 def plot_bounds_filter_comparison(
     x: np.ndarray,
     L: float,
