@@ -2089,7 +2089,7 @@ def _overview_overplot_hist(
             label=f"eps*={interior_result.eps_star:.2e}",
         )
     ax.grid(True, alpha=0.3)
-    ax.legend(loc="upper right", fontsize=7)
+    ax.legend(loc="best", fontsize=7)
 
 
 def _overview_boundary_twinx(ax_lower, result: BoundaryResult) -> None:
@@ -2186,7 +2186,7 @@ def _overview_boundary_twinx(ax_lower, result: BoundaryResult) -> None:
     ax_lower.legend(
         lines_lower + lines_upper,
         labels_lower + labels_upper,
-        loc="lower right",
+        loc="best",
         fontsize=7,
     )
 
@@ -2230,7 +2230,7 @@ def _overview_interior_zhist(ax, interior_result: InteriorResult) -> None:
     ax.set_ylabel("Count")
     ax.set_title("Interior z-histogram")
     ax.grid(True, alpha=0.3)
-    ax.legend(loc="upper right", fontsize=7)
+    ax.legend(loc="best", fontsize=7)
 
 
 def _overview_ecdf_side(
@@ -2262,7 +2262,7 @@ def _overview_ecdf_side(
         ax.set_title("ECDF near lower")
         if t_star is not None:
             ax.axvline(t_star, color="red", lw=2, label=f"t_lo*={t_star:.4f}")
-            ax.legend(loc="lower right", fontsize=7)
+            ax.legend(loc="best", fontsize=7)
     else:
         ax.plot([0.9, 1.0], [0.9, 1.0], "k--", alpha=0.5, linewidth=1)
         ax.set_xlim(0.9, 1.0)
@@ -2270,7 +2270,7 @@ def _overview_ecdf_side(
         ax.set_title("ECDF near upper")
         if t_star is not None:
             ax.axvline(1 - t_star, color="red", lw=2, label=f"t_hi*={t_star:.4f}")
-            ax.legend(loc="lower right", fontsize=7)
+            ax.legend(loc="best", fontsize=7)
     ax.set_ylabel("ECDF")
     ax.grid(True, alpha=0.3)
 
@@ -2294,7 +2294,7 @@ def _overview_interior_mass(ax, interior_result: InteriorResult) -> None:
             ls=":",
             label=f"eps*={interior_result.eps_star:.2e}",
         )
-        ax.legend(loc="lower right", fontsize=7)
+        ax.legend(loc="best", fontsize=7)
 
 
 def _overview_spacing(
