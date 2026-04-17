@@ -2321,6 +2321,7 @@ def _overview_ecdf_side(
     tols: np.ndarray,
     t_star: float | None,
     cmap,
+    with_colorbar: bool = True,
 ) -> None:
     """Simplified ECDF panel with tolerance-colored overlays + t* marker.
 
@@ -2385,6 +2386,18 @@ def _overview_ecdf_side(
         ax.legend(loc="best", fontsize=7)
     ax.set_ylabel("ECDF")
     ax.grid(True, alpha=0.3)
+
+    if with_colorbar:
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="3%", pad=0.1)
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array([])
+        cbar = ax.figure.colorbar(sm, cax=cax, orientation="vertical")
+        cbar.set_label("Tolerance")
+        cbar.set_ticks(list(tols))
+        cbar.ax.tick_params(labelsize=7)
 
 
 def _overview_interior_mass(
