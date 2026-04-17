@@ -2141,54 +2141,57 @@ def _overview_merged_hist(
     ax.legend(loc="best", fontsize=7)
 
 
-def _overview_boundary_twinx(ax_lower, result: BoundaryResult, config: PlotConfig) -> None:
-    """Single-panel lower + upper boundary mass curves via twinx.
+def _overview_boundary_mass_side(
+    ax,
+    result: BoundaryResult,
+    side: Literal["lower", "upper"],
+    config: PlotConfig,
+) -> None:
+    """Single boundary-side mass-curve panel with tolerance-colored segments.
 
-    Each side's mass curve is drawn segment-by-segment with color
-    encoding the tolerance value at that segment - matching the
-    standalone plot_boundary_diagnostics. The twinx separation lets
-    each side keep its own y-scale (so neither is visually compressed
-    when the magnitudes differ). Side identity is encoded by line
-    style: solid for lower (left axis), dashed for upper (right axis).
-    A shared tolerance colorbar is appended via make_axes_locatable.
+    Draws one side only (lower or upper) with per-segment color encoding
+    the tolerance value, a tolerance colorbar appended via
+    make_axes_locatable, and t_star marker + zoom logic.
     """
     tol_grid = result.tol_grid
+    if side == "lower":
+        mass_curve = result.lower_mass_curve
+        t_star = result.t_lo_star
+        title = "Lower boundary mass curve"
+        ylabel = "P(u < tol)"
+        marker_label = "t_lo*"
+    else:
+        mass_curve = result.upper_mass_curve
+        t_star = result.t_hi_star
+        title = "Upper boundary mass curve"
+        ylabel = "P(u > 1-tol)"
+        marker_label = "t_hi*"
+
     if len(tol_grid) == 0:
-        ax_lower.axis("off")
-        ax_lower.text(
+        ax.axis("off")
+        ax.text(
             0.5,
             0.5,
             "No mass-curve data",
             ha="center",
             va="center",
-            transform=ax_lower.transAxes,
+            transform=ax.transAxes,
             fontsize=10,
         )
         return
-
-    ax_upper = ax_lower.twinx()
 
     cmap = plt.get_cmap(config.cmap)
     norm = Normalize(vmin=tol_grid[0], vmax=tol_grid[-1])
     seg_colors = [cmap(0.15 + 0.85 * norm(t)) for t in tol_grid]
 
     for i in range(len(tol_grid) - 1):
-        ax_lower.plot(
+        ax.plot(
             tol_grid[i : i + 2],
-            result.lower_mass_curve[i : i + 2],
+            mass_curve[i : i + 2],
             color=seg_colors[i],
-            linestyle="-",
             linewidth=2,
         )
-        ax_upper.plot(
-            tol_grid[i : i + 2],
-            result.upper_mass_curve[i : i + 2],
-            color=seg_colors[i],
-            linestyle="--",
-            linewidth=2,
-        )
-
-    ax_lower.plot(
+    ax.plot(
         tol_grid,
         tol_grid,
         "k--",
@@ -2196,84 +2199,40 @@ def _overview_boundary_twinx(ax_lower, result: BoundaryResult, config: PlotConfi
         linewidth=1,
         label="Uniform (P = tol)",
     )
+    ax.set_xlabel("Tolerance (tol)")
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.grid(True, alpha=0.3)
 
-    # Side-identity legend proxies (don't display the per-segment colored lines).
-    from matplotlib.lines import Line2D
-
-    legend_proxies = [
-        Line2D([], [], color="black", linestyle="-", linewidth=2, label="Lower P(u<tol) (solid)"),
-        Line2D(
-            [],
-            [],
-            color="black",
-            linestyle="--",
-            linewidth=2,
-            label="Upper P(u>1-tol) (dashed)",
-        ),
-    ]
-
-    ax_lower.set_xlabel("Tolerance (tol)")
-    ax_lower.set_ylabel("Lower P(u < tol)")
-    ax_upper.set_ylabel("Upper P(u > 1-tol)")
-    ax_lower.set_title("Boundary mass curves (color = tolerance, style = side)")
-    ax_lower.grid(True, alpha=0.3)
-
-    if result.t_lo_star is not None:
-        line_t_lo = ax_lower.axvline(
-            result.t_lo_star,
+    if t_star is not None:
+        ax.axvline(
+            t_star,
             color="red",
             linestyle=":",
             linewidth=2,
-            label=f"t_lo* = {result.t_lo_star:.4f}",
+            label=f"{marker_label} = {t_star:.4f}",
         )
-        legend_proxies.append(line_t_lo)
-    if result.t_hi_star is not None:
-        line_t_hi = ax_upper.axvline(
-            result.t_hi_star,
-            color="red",
-            linestyle="-.",
-            linewidth=2,
-            label=f"t_hi* = {result.t_hi_star:.4f}",
-        )
-        legend_proxies.append(line_t_hi)
 
-    t_lo_for_zoom = result.t_lo_star if result.t_lo_star is not None else 0.0
-    t_hi_for_zoom = result.t_hi_star if result.t_hi_star is not None else 0.0
-    x_max = max(t_lo_for_zoom * 4, t_hi_for_zoom * 4, result.pileup_threshold * 4)
+    t_for_zoom = t_star if t_star is not None else 0.0
+    x_max = max(t_for_zoom * 4, result.pileup_threshold * 4)
     if x_max > 0:
         in_range = tol_grid <= x_max
         if in_range.any():
-            lower_in = result.lower_mass_curve[in_range]
-            upper_in = result.upper_mass_curve[in_range]
+            mass_in = mass_curve[in_range]
             uniform_in = tol_grid[in_range]
-            y_max_lower = 1.2 * max(float(lower_in.max()), 1.5 * float(uniform_in.max()))
-            y_max_upper = 1.2 * max(float(upper_in.max()), 1.5 * float(uniform_in.max()))
-            ax_lower.set_xlim(0, x_max)
-            ax_lower.set_ylim(0, y_max_lower)
-            ax_upper.set_ylim(0, y_max_upper)
+            y_max = 1.2 * max(float(mass_in.max()), 1.5 * float(uniform_in.max()))
+            ax.set_xlim(0, x_max)
+            ax.set_ylim(0, y_max)
 
-    handles_uniform, labels_uniform = ax_lower.get_legend_handles_labels()
-    # Merge style proxies with uniform-reference handle, dedup by label.
-    seen_labels = set()
-    merged_handles = []
-    merged_labels = []
-    for h, label in [(p, p.get_label()) for p in legend_proxies] + list(
-        zip(handles_uniform, labels_uniform, strict=True)
-    ):
-        if label in seen_labels:
-            continue
-        seen_labels.add(label)
-        merged_handles.append(h)
-        merged_labels.append(label)
-    ax_lower.legend(merged_handles, merged_labels, loc="best", fontsize=7)
+    ax.legend(loc="best", fontsize=7)
 
     from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-    divider = make_axes_locatable(ax_lower)
-    cax = divider.append_axes("right", size="3%", pad=0.6)
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="3%", pad=0.1)
     sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
     sm.set_array([])
-    cbar = ax_lower.figure.colorbar(sm, cax=cax, orientation="vertical")
+    cbar = ax.figure.colorbar(sm, cax=cax, orientation="vertical")
     cbar.set_label("Tolerance")
     cbar.ax.tick_params(labelsize=7)
 
@@ -2493,54 +2452,50 @@ def _draw_elbow_family(
     return True
 
 
-def _overview_boundary_elbows_panel(
+def _overview_boundary_elbow_side(
     ax,
     boundary_result: BoundaryResult,
+    side: Literal["lower", "upper"],
 ) -> None:
-    """Combined boundary elbow panel: lower + upper on one axes.
+    """Single boundary-side elbow panel.
 
-    Both sides share the same tolerance y-axis (no twinx needed) and are
-    distinguished by marker + color: lower = blue circles, upper = red
-    crosses. Each side carries its per-quantile scatter, Kneedle
-    diamond, and t_raw / t_star axhlines — matching the two-panel
-    *_boundary_elbows.png standalone.
+    One side only (lower or upper), with per-quantile scatter, Kneedle
+    diamond, t_raw and t_star axhlines — matches the corresponding
+    panel of the standalone *_boundary_elbows.png.
     """
-    boundary_elbows = boundary_result.quantile_elbows or {}
-    lower_elbows = boundary_elbows.get("lower", {}) if isinstance(boundary_elbows, dict) else {}
-    upper_elbows = boundary_elbows.get("upper", {}) if isinstance(boundary_elbows, dict) else {}
+    elbows_dict = boundary_result.quantile_elbows or {}
+    if not isinstance(elbows_dict, dict):
+        elbows_dict = {}
+    if side == "lower":
+        elbows = elbows_dict.get("lower", {})
+        t_star = boundary_result.t_lo_star
+        t_raw = boundary_result.t_lo_raw
+        color = "#1f77b4"
+        marker = "o"
+        label_prefix = "lower"
+        title = "Lower boundary quantile elbows"
+    else:
+        elbows = elbows_dict.get("upper", {})
+        t_star = boundary_result.t_hi_star
+        t_raw = boundary_result.t_hi_raw
+        color = "#d62728"
+        marker = "x"
+        label_prefix = "upper"
+        title = "Upper boundary quantile elbows"
 
-    lower_drawn = _draw_elbow_family(
-        ax,
-        lower_elbows,
-        boundary_result.t_lo_star,
-        boundary_result.t_lo_raw,
-        "#1f77b4",
-        "o",
-        "lower",
-    )
-    upper_drawn = _draw_elbow_family(
-        ax,
-        upper_elbows,
-        boundary_result.t_hi_star,
-        boundary_result.t_hi_raw,
-        "#d62728",
-        "x",
-        "upper",
-    )
-
+    drawn = _draw_elbow_family(ax, elbows, t_star, t_raw, color, marker, label_prefix)
     ax.set_xlabel("Quantile")
     ax.set_ylabel("Tolerance")
-    ax.set_title("Boundary quantile elbows (lower + upper)")
+    ax.set_title(title)
     ax.grid(True, alpha=0.3)
-
-    if lower_drawn or upper_drawn:
-        ax.legend(loc="best", fontsize=6, ncol=2)
+    if drawn:
+        ax.legend(loc="best", fontsize=7)
     else:
         ax.axis("off")
         ax.text(
             0.5,
             0.5,
-            "No boundary quantile elbows",
+            f"No {label_prefix} quantile elbows",
             ha="center",
             va="center",
             transform=ax.transAxes,
@@ -2604,22 +2559,24 @@ def plot_parameter_overview(
     tp_fn_status: str | None = None,
     tols: np.ndarray | None = None,
 ) -> Figure:
-    """Single-page 3x3 per-parameter overview.
+    """Single-page 4x3 per-parameter overview.
 
     Layout:
-        Row 1: merged raw+filtered+tolerance sweep / boundary mass twinx
-               (tolerance-colored, side by line style) / interior z-hist
-        Row 2: interior mass curve / ECDF lower / ECDF upper
-        Row 3: quantile spacing / boundary elbows (lower+upper)
-               / interior elbows
+        Row 1: merged raw+sweep+filtered (spans cols 0-1) / interior z-hist
+        Row 2: lower boundary mass / upper boundary mass / interior mass
+        Row 3: ECDF lower / ECDF upper / quantile spacing
+        Row 4: lower boundary elbows / upper boundary elbows / interior elbows
 
-    The top-left panel folds three visualizations (raw, tolerance sweep,
-    pipeline-filtered) into one info-dense cell with a colorbar. The
-    boundary mass panel colors each mass curve segment by tolerance and
-    shares a colorbar. Boundary and interior elbow panels match the
-    standalone ``*_boundary_elbows.png`` / ``*_interior_elbows.png``
-    figures (per-side quantile scatter, Kneedle diamond marker, t_raw and
-    t_star axhlines).
+    Rows 2 and 4 mirror each other: left column = lower boundary, middle =
+    upper boundary, right = interior. This "lower/upper/interior" column
+    discipline lets the viewer scan vertically to compare related
+    visualizations for the same side of the distribution.
+
+    The top-left merged panel folds three visualizations (tolerance sweep
+    in full color, pipeline-filtered as gray overlay, cut markers as
+    vertical lines) with a colorbar. Each mass-curve and elbow panel
+    matches the corresponding standalone figure's content so the overview
+    is a complete visual verification surface.
 
     Args:
         param_name: Display name (appears in title).
@@ -2642,11 +2599,9 @@ def plot_parameter_overview(
             0.01, 0.02, 0.03, 0.05]``.
 
     Returns:
-        Figure sized 15x15. Axes count = 9 grid panels + 1 boundary-mass
-        twinx + 1 boundary-mass colorbar + 1 merged top-left colorbar = 12.
-        (The separate boundary / interior elbow panels no longer use twinx,
-        so the count is stable regardless of whether interior quantile
-        elbows are populated.)
+        Figure sized 16x22. Axes count = 11 grid panels (merged top spans
+        two cells = 1 axes) + 3 colorbars (merged top, lower mass, upper
+        mass) = 14.
     """
     if config is None:
         config = PlotConfig()
@@ -2680,13 +2635,13 @@ def plot_parameter_overview(
 
     cmap = plt.get_cmap(config.cmap)
 
-    fig = plt.figure(figsize=(15, 15), dpi=config.dpi)
-    gs = fig.add_gridspec(3, 3, hspace=0.45, wspace=0.35)
+    fig = plt.figure(figsize=(16, 22), dpi=config.dpi)
+    gs = fig.add_gridspec(4, 3, hspace=0.5, wspace=0.35)
 
-    # Row 1
-    ax_r1c1 = fig.add_subplot(gs[0, 0])
+    # Row 1: merged top panel spans cols 0-1; interior z-hist in col 2.
+    ax_r1c01 = fig.add_subplot(gs[0, 0:2])
     _overview_merged_hist(
-        ax_r1c1,
+        ax_r1c01,
         x_clean,
         x_filtered,
         n_total,
@@ -2700,60 +2655,67 @@ def plot_parameter_overview(
         config,
     )
 
-    ax_r1c2 = fig.add_subplot(gs[0, 1])
-    _overview_boundary_twinx(ax_r1c2, boundary_result, config)
-
-    ax_r1c3 = fig.add_subplot(gs[0, 2])
+    ax_r1c2 = fig.add_subplot(gs[0, 2])
     if interior_result is not None:
-        _overview_interior_zhist(ax_r1c3, interior_result)
+        _overview_interior_zhist(ax_r1c2, interior_result)
     else:
-        ax_r1c3.axis("off")
-        ax_r1c3.text(
+        ax_r1c2.axis("off")
+        ax_r1c2.text(
             0.5,
             0.5,
             "No interior result",
             ha="center",
             va="center",
-            transform=ax_r1c3.transAxes,
+            transform=ax_r1c2.transAxes,
             fontsize=11,
         )
 
-    # Row 2: interior mass curve, ECDF lower, ECDF upper.
+    # Row 2: mass curves - lower boundary, upper boundary, interior.
     ax_r2c1 = fig.add_subplot(gs[1, 0])
-    if interior_result is not None:
-        _overview_interior_mass(ax_r2c1, interior_result)
-    else:
-        ax_r2c1.axis("off")
-        ax_r2c1.text(
-            0.5,
-            0.5,
-            "No interior result",
-            ha="center",
-            va="center",
-            transform=ax_r2c1.transAxes,
-            fontsize=11,
-        )
+    _overview_boundary_mass_side(ax_r2c1, boundary_result, "lower", config)
 
     ax_r2c2 = fig.add_subplot(gs[1, 1])
+    _overview_boundary_mass_side(ax_r2c2, boundary_result, "upper", config)
+
     ax_r2c3 = fig.add_subplot(gs[1, 2])
+    if interior_result is not None:
+        _overview_interior_mass(ax_r2c3, interior_result)
+    else:
+        ax_r2c3.axis("off")
+        ax_r2c3.text(
+            0.5,
+            0.5,
+            "No interior result",
+            ha="center",
+            va="center",
+            transform=ax_r2c3.transAxes,
+            fontsize=11,
+        )
+
+    # Row 3: ECDF lower, ECDF upper, quantile spacing.
+    ax_r3c1 = fig.add_subplot(gs[2, 0])
+    ax_r3c2 = fig.add_subplot(gs[2, 1])
     if U > L:
         u_values = (x_clean - L) / (U - L)
-        _overview_ecdf_side(ax_r2c2, u_values, "lower", tols, boundary_result.t_lo_star, cmap)
-        _overview_ecdf_side(ax_r2c3, u_values, "upper", tols, boundary_result.t_hi_star, cmap)
-
-    # Row 3: quantile spacing, boundary elbows, interior elbows.
-    ax_r3c1 = fig.add_subplot(gs[2, 0])
-    if n_total > 0:
-        x_sorted = np.sort(x_clean)
-        _overview_spacing(ax_r3c1, x_sorted, L, U, tols, cmap)
-    else:
-        ax_r3c1.axis("off")
-
-    ax_r3c2 = fig.add_subplot(gs[2, 1])
-    _overview_boundary_elbows_panel(ax_r3c2, boundary_result)
+        _overview_ecdf_side(ax_r3c1, u_values, "lower", tols, boundary_result.t_lo_star, cmap)
+        _overview_ecdf_side(ax_r3c2, u_values, "upper", tols, boundary_result.t_hi_star, cmap)
 
     ax_r3c3 = fig.add_subplot(gs[2, 2])
-    _overview_interior_elbows_panel(ax_r3c3, interior_result)
+    if n_total > 0:
+        x_sorted = np.sort(x_clean)
+        _overview_spacing(ax_r3c3, x_sorted, L, U, tols, cmap)
+    else:
+        ax_r3c3.axis("off")
+
+    # Row 4: elbows - lower boundary, upper boundary, interior.
+    ax_r4c1 = fig.add_subplot(gs[3, 0])
+    _overview_boundary_elbow_side(ax_r4c1, boundary_result, "lower")
+
+    ax_r4c2 = fig.add_subplot(gs[3, 1])
+    _overview_boundary_elbow_side(ax_r4c2, boundary_result, "upper")
+
+    ax_r4c3 = fig.add_subplot(gs[3, 2])
+    _overview_interior_elbows_panel(ax_r4c3, interior_result)
 
     x0_str = f"{x0:.3g}" if x0 is not None else "None"
     title_parts = [f"{param_name}", f"L={L:.3g}", f"U={U:.3g}", f"x0={x0_str}"]

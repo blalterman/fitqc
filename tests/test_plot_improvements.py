@@ -192,18 +192,15 @@ def test_histogram_tolerance_overlays_combined_accepts_external_ax():
 
 
 def test_parameter_overview_smoke():
-    """U5: 3x3 overview renders for all interior_result paths.
+    """V2: 4x3 overview renders for all interior_result paths.
 
-    Axes count is stable at 12 across all paths since the elbow panels
-    no longer use twinx (they are split into per-side cells):
-    - 9 grid cells
-    - boundary mass twinx (+1)
-    - boundary mass tolerance colorbar (+1)
-    - merged top-left panel colorbar (+1)
-
-    Placeholder text in the interior mass / interior elbow cells when
-    interior_result is None still occupies a single Axes, so the count
-    doesn't change between paths.
+    Axes count after the V2 reshuffle:
+    - 11 grid panels: merged top spans 2 cells (1 axes), interior z-hist
+      (1), 3 mass-curve cells, 3 ECDF/spacing cells, 3 elbow cells.
+    - 3 colorbars: merged top panel, lower boundary mass, upper boundary
+      mass.
+    Total: 14 axes. Stable across all interior_result paths since
+    placeholder text still occupies the cell.
     """
     rng = np.random.default_rng(3)
     L, U = 0.0, 1.0
@@ -224,7 +221,8 @@ def test_parameter_overview_smoke():
         config=PlotConfig(),
         tp_fn_status="lower: TP | upper: TP",
     )
-    assert len(fig_mock_interior.axes) == 12
+    assert len(fig_mock_interior.axes) == 14
+    assert tuple(fig_mock_interior.get_size_inches()) == (16.0, 22.0)
     plt.close(fig_mock_interior)
 
     fig_none = plot_parameter_overview(
@@ -237,10 +235,10 @@ def test_parameter_overview_smoke():
         boundary_result=br,
         config=PlotConfig(),
     )
-    assert len(fig_none.axes) == 12
+    assert len(fig_none.axes) == 14
     plt.close(fig_none)
 
-    # Interior with quantile_elbows populated - same count (no twinx).
+    # Interior with quantile_elbows populated - same count.
     ir_with_elbows = InteriorResult(
         spike_detected=True,
         spike_z_loc=0.05,
@@ -266,5 +264,5 @@ def test_parameter_overview_smoke():
         boundary_result=br_with_elbows,
         config=PlotConfig(),
     )
-    assert len(fig_full.axes) == 12
+    assert len(fig_full.axes) == 14
     plt.close(fig_full)
