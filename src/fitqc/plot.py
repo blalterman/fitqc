@@ -2102,16 +2102,19 @@ def _overview_merged_hist(
             label=f"Pipeline filtered (kept {n_kept} of {n_total})",
         )
 
-    ax.axvline(L, color="black", lw=1)
-    ax.axvline(U, color="black", lw=1)
+    # zorder=200 places every marker above the tolerance sweep layers
+    # (zorder 0..len(tols)-1) and above the filtered overlay (zorder 100).
+    ax.axvline(L, color="black", lw=1, zorder=200)
+    ax.axvline(U, color="black", lw=1, zorder=200)
     if x0 is not None:
-        ax.axvline(x0, color="green", lw=1.5, label=f"x0={x0:.3g}")
+        ax.axvline(x0, color="green", lw=1.5, zorder=200, label=f"x0={x0:.3g}")
     if boundary_result.t_lo_star is not None:
         ax.axvline(
             L + boundary_result.t_lo_star * (U - L),
             color="red",
             lw=2,
             ls=":",
+            zorder=200,
             label=f"t_lo*={boundary_result.t_lo_star:.4f}",
         )
     if boundary_result.t_hi_star is not None:
@@ -2120,17 +2123,19 @@ def _overview_merged_hist(
             color="red",
             lw=2,
             ls=":",
+            zorder=200,
             label=f"t_hi*={boundary_result.t_hi_star:.4f}",
         )
     if interior_result is not None and interior_result.eps_star is not None and x0 is not None:
         half_width = interior_result.eps_star * max(x0 - L, U - x0)
-        ax.axvline(x0 - half_width, color="orange", lw=1.5, ls="--", alpha=0.7)
+        ax.axvline(x0 - half_width, color="orange", lw=1.5, ls="--", alpha=0.9, zorder=200)
         ax.axvline(
             x0 + half_width,
             color="orange",
             lw=1.5,
             ls="--",
-            alpha=0.7,
+            alpha=0.9,
+            zorder=200,
             label=f"eps*={interior_result.eps_star:.2e}",
         )
 
