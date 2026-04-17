@@ -46,17 +46,30 @@ def plot_interior_diagnostics(result: InteriorResult, config: PlotConfig) -> Fig
 
     cmap = plt.get_cmap(config.cmap)
 
-    # Panel 1: Histogram of z-values
+    # Panel 1: Histogram of z-values, before/after interior cut.
     ax1 = axes[0]
     bin_centers = (result.hist_edges[:-1] + result.hist_edges[1:]) / 2
+    bin_width = result.hist_edges[1] - result.hist_edges[0]
     ax1.bar(
         bin_centers,
         result.hist_counts,
-        width=result.hist_edges[1] - result.hist_edges[0],
-        color=cmap(0.3),
+        width=bin_width,
+        color="#808080",
         edgecolor="none",
-        alpha=0.7,
+        alpha=0.6,
+        label="Before cut",
     )
+    if result.eps_star is not None:
+        after_counts = np.where(bin_centers >= result.eps_star, result.hist_counts, 0)
+        ax1.bar(
+            bin_centers,
+            after_counts,
+            width=bin_width,
+            color=cmap(0.3),
+            edgecolor="none",
+            alpha=0.85,
+            label=f"After cut (z >= eps*={result.eps_star:.2e})",
+        )
     ax1.set_xlabel("z (normalized distance from x0)")
     ax1.set_ylabel("Count")
     ax1.set_title("Distribution of z-values")
@@ -71,7 +84,7 @@ def plot_interior_diagnostics(result: InteriorResult, config: PlotConfig) -> Fig
             linewidth=2,
             label=f"Spike at z={result.spike_z_loc:.4f}",
         )
-        ax1.legend(loc="upper right")
+    ax1.legend(loc="upper right", fontsize=8)
 
     # Panel 2: Mass curve (linear scale)
     ax2 = axes[1]
