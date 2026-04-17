@@ -126,7 +126,11 @@ def test_interior_diagnostics_uses_symlog_on_z():
 
 
 def test_parameter_overview_smoke():
-    """B7: 3x2 overview renders for both interior_result paths."""
+    """S4: 3x3 overview renders for both interior_result paths.
+
+    The 3x3 grid plus the twinx on the boundary-mass panel plus the
+    sub-gridspec (2 mini panels) in the ECDF cell yields 11 Axes total.
+    """
     rng = np.random.default_rng(3)
     L, U = 0.0, 1.0
     x0 = 0.0
@@ -146,7 +150,8 @@ def test_parameter_overview_smoke():
         config=PlotConfig(),
         tp_fn_status="lower: TP | upper: TP",
     )
-    assert len(fig_populated.axes) == 6
+    # 3x3 (=9) + twinx (+1) + ECDF sub-gridspec (+1) = 11
+    assert len(fig_populated.axes) == 11
     plt.close(fig_populated)
 
     fig_none = plot_parameter_overview(
@@ -159,5 +164,6 @@ def test_parameter_overview_smoke():
         boundary_result=br,
         config=PlotConfig(),
     )
-    assert len(fig_none.axes) == 6
+    # Same axis count - interior panels render placeholder text but still occupy their Axes slots.
+    assert len(fig_none.axes) == 11
     plt.close(fig_none)

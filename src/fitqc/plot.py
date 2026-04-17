@@ -2021,73 +2021,361 @@ def _plot_boundary_panel(
     ax.legend(loc="best", fontsize=8)
 
 
-def _draw_boundary_mass_panel(
+def _overview_overplot_hist(
     ax,
-    result: BoundaryResult,
-    side: Literal["lower", "upper"],
+    x_clean: np.ndarray,
+    x_filtered: np.ndarray,
+    n_total: int,
+    n_kept: int,
+    x0: float | None,
+    L: float,
+    U: float,
+    boundary_result: BoundaryResult,
+    interior_result: InteriorResult | None,
 ) -> None:
-    """Draw a single boundary mass-curve panel with B2-style auto-zoom.
+    """Single-panel raw (gray) + filtered (blue) overplot with cut markers."""
+    bin_edges = np.linspace(L, U, 101)
+    if n_total > 0:
+        ax.hist(
+            x_clean,
+            bins=bin_edges,
+            color="#808080",
+            alpha=0.6,
+            edgecolor="none",
+            label=f"Raw (n={n_total})",
+        )
+    if n_kept > 0:
+        ax.hist(
+            x_filtered,
+            bins=bin_edges,
+            color="#2166ac",
+            alpha=0.75,
+            edgecolor="none",
+            label=f"Filtered (kept {n_kept})",
+        )
+    ax.set_yscale("log")
+    ax.set_xlabel("Parameter value")
+    ax.set_ylabel("Count")
+    ax.set_title("Raw vs filtered histogram")
+    ax.axvline(L, color="black", lw=1)
+    ax.axvline(U, color="black", lw=1)
+    if x0 is not None:
+        ax.axvline(x0, color="green", lw=1.5, label=f"x0={x0:.3g}")
+    if boundary_result.t_lo_star is not None:
+        ax.axvline(
+            L + boundary_result.t_lo_star * (U - L),
+            color="red",
+            lw=2,
+            ls=":",
+            label=f"t_lo*={boundary_result.t_lo_star:.4f}",
+        )
+    if boundary_result.t_hi_star is not None:
+        ax.axvline(
+            U - boundary_result.t_hi_star * (U - L),
+            color="red",
+            lw=2,
+            ls=":",
+            label=f"t_hi*={boundary_result.t_hi_star:.4f}",
+        )
+    if interior_result is not None and interior_result.eps_star is not None and x0 is not None:
+        half_width = interior_result.eps_star * max(x0 - L, U - x0)
+        ax.axvline(x0 - half_width, color="orange", lw=1.5, ls="--", alpha=0.7)
+        ax.axvline(
+            x0 + half_width,
+            color="orange",
+            lw=1.5,
+            ls="--",
+            alpha=0.7,
+            label=f"eps*={interior_result.eps_star:.2e}",
+        )
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc="upper right", fontsize=7)
 
-    Replicates the zoom logic from plot_boundary_diagnostics so the overview
-    panels share the same scaling. Inlined (rather than shared) to keep the
-    overview self-contained — the main boundary plot has additional colorbar
-    and two-panel layout concerns that don't apply here.
+
+def _overview_boundary_twinx(ax_lower, result: BoundaryResult) -> None:
+    """Single-panel lower + upper boundary mass curves via twinx.
+
+    Lower curve on the main axis, upper curve on a twin right-side axis,
+    both zoomed to the pileup region per the B2 logic.
     """
     tol_grid = result.tol_grid
-    if side == "lower":
-        mass_curve = result.lower_mass_curve
-        t_star = result.t_lo_star
-        label_mass = "P(u < tol)"
-        title = "Lower boundary mass curve"
-        marker_label = "t_lo*"
-    else:
-        mass_curve = result.upper_mass_curve
-        t_star = result.t_hi_star
-        label_mass = "P(u > 1-tol)"
-        title = "Upper boundary mass curve"
-        marker_label = "t_hi*"
-
     if len(tol_grid) == 0:
-        ax.axis("off")
-        ax.text(
+        ax_lower.axis("off")
+        ax_lower.text(
             0.5,
             0.5,
             "No mass-curve data",
             ha="center",
             va="center",
-            transform=ax.transAxes,
+            transform=ax_lower.transAxes,
             fontsize=10,
         )
         return
 
-    ax.plot(tol_grid, mass_curve, color="#2166ac", linewidth=2)
-    ax.plot(tol_grid, tol_grid, "k--", alpha=0.5, linewidth=1, label="Uniform (P = tol)")
-    ax.set_xlabel("Tolerance (tol)")
-    ax.set_ylabel(label_mass)
-    ax.set_title(title)
-    ax.grid(True, alpha=0.3)
+    ax_upper = ax_lower.twinx()
 
-    if t_star is not None:
-        ax.axvline(
-            t_star,
-            color="red",
+    lower_color = "#1f77b4"
+    upper_color = "#d62728"
+
+    ax_lower.plot(
+        tol_grid,
+        result.lower_mass_curve,
+        color=lower_color,
+        linewidth=2,
+        label="Lower: P(u < tol)",
+    )
+    ax_lower.plot(
+        tol_grid,
+        tol_grid,
+        "k--",
+        alpha=0.4,
+        linewidth=1,
+        label="Uniform (P = tol)",
+    )
+    ax_upper.plot(
+        tol_grid,
+        result.upper_mass_curve,
+        color=upper_color,
+        linewidth=2,
+        linestyle="--",
+        label="Upper: P(u > 1-tol)",
+    )
+
+    ax_lower.set_xlabel("Tolerance (tol)")
+    ax_lower.set_ylabel("Lower P(u < tol)", color=lower_color)
+    ax_upper.set_ylabel("Upper P(u > 1-tol)", color=upper_color)
+    ax_lower.tick_params(axis="y", labelcolor=lower_color)
+    ax_upper.tick_params(axis="y", labelcolor=upper_color)
+    ax_lower.set_title("Boundary mass curves (twinx)")
+    ax_lower.grid(True, alpha=0.3)
+
+    if result.t_lo_star is not None:
+        ax_lower.axvline(
+            result.t_lo_star,
+            color=lower_color,
             linestyle=":",
             linewidth=2,
-            label=f"{marker_label} = {t_star:.4f}",
+            label=f"t_lo* = {result.t_lo_star:.4f}",
+        )
+    if result.t_hi_star is not None:
+        ax_upper.axvline(
+            result.t_hi_star,
+            color=upper_color,
+            linestyle=":",
+            linewidth=2,
+            label=f"t_hi* = {result.t_hi_star:.4f}",
         )
 
-    t_for_zoom = t_star if t_star is not None else 0.0
-    x_max = max(t_for_zoom * 4, result.pileup_threshold * 4)
+    t_lo_for_zoom = result.t_lo_star if result.t_lo_star is not None else 0.0
+    t_hi_for_zoom = result.t_hi_star if result.t_hi_star is not None else 0.0
+    x_max = max(t_lo_for_zoom * 4, t_hi_for_zoom * 4, result.pileup_threshold * 4)
     if x_max > 0:
         in_range = tol_grid <= x_max
         if in_range.any():
-            mass_in = mass_curve[in_range]
+            lower_in = result.lower_mass_curve[in_range]
+            upper_in = result.upper_mass_curve[in_range]
             uniform_in = tol_grid[in_range]
-            y_max = 1.2 * max(float(mass_in.max()), 1.5 * float(uniform_in.max()))
-            ax.set_xlim(0, x_max)
-            ax.set_ylim(0, y_max)
+            y_max_lower = 1.2 * max(float(lower_in.max()), 1.5 * float(uniform_in.max()))
+            y_max_upper = 1.2 * max(float(upper_in.max()), 1.5 * float(uniform_in.max()))
+            ax_lower.set_xlim(0, x_max)
+            ax_lower.set_ylim(0, y_max_lower)
+            ax_upper.set_ylim(0, y_max_upper)
 
-    ax.legend(loc="lower right", fontsize=8)
+    lines_lower, labels_lower = ax_lower.get_legend_handles_labels()
+    lines_upper, labels_upper = ax_upper.get_legend_handles_labels()
+    ax_lower.legend(
+        lines_lower + lines_upper,
+        labels_lower + labels_upper,
+        loc="lower right",
+        fontsize=7,
+    )
+
+
+def _overview_interior_zhist(ax, interior_result: InteriorResult) -> None:
+    """Interior z-histogram with before/after overplot."""
+    if interior_result.hist_edges is None or len(interior_result.hist_edges) <= 1:
+        ax.axis("off")
+        ax.text(0.5, 0.5, "No z-histogram", ha="center", va="center", transform=ax.transAxes)
+        return
+    ihe = interior_result.hist_edges
+    bin_centers = (ihe[:-1] + ihe[1:]) / 2
+    bin_width = ihe[1] - ihe[0]
+    ax.bar(
+        bin_centers,
+        interior_result.hist_counts,
+        width=bin_width,
+        color="#808080",
+        alpha=0.6,
+        edgecolor="none",
+        label="Before cut",
+    )
+    if interior_result.eps_star is not None:
+        after_counts = np.where(
+            bin_centers >= interior_result.eps_star,
+            interior_result.hist_counts,
+            0,
+        )
+        ax.bar(
+            bin_centers,
+            after_counts,
+            width=bin_width,
+            color="#2166ac",
+            alpha=0.85,
+            edgecolor="none",
+            label=f"After cut (eps*={interior_result.eps_star:.2e})",
+        )
+        ax.axvline(interior_result.eps_star, color="red", lw=2, ls=":")
+    ax.set_yscale("symlog", linthresh=1)
+    ax.set_xlabel("z (normalized distance from x0)")
+    ax.set_ylabel("Count")
+    ax.set_title("Interior z-histogram")
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc="upper right", fontsize=7)
+
+
+def _overview_ecdf_side(
+    ax,
+    u: np.ndarray,
+    side: Literal["lower", "upper"],
+    tols: np.ndarray,
+    t_star: float | None,
+    cmap,
+) -> None:
+    """Simplified ECDF panel with tolerance-colored overlays + t* marker."""
+    u = u[np.isfinite(u)]
+    norm = Normalize(vmin=tols[0], vmax=tols[-1])
+    alphas = np.linspace(1.0, 0.3, len(tols))
+    for i, tol in enumerate(tols):
+        if side == "lower":
+            u_filt = u[u > tol]
+        else:
+            u_filt = u[u < 1 - tol]
+        if len(u_filt) == 0:
+            continue
+        u_sorted = np.sort(u_filt)
+        ecdf_vals = np.arange(1, len(u_sorted) + 1) / len(u_sorted)
+        ax.plot(u_sorted, ecdf_vals, color=cmap(norm(tol)), alpha=alphas[i], linewidth=1.5)
+    if side == "lower":
+        ax.plot([0, 0.1], [0, 0.1], "k--", alpha=0.5, linewidth=1)
+        ax.set_xlim(0, 0.1)
+        ax.set_xlabel("u")
+        ax.set_title("ECDF near lower")
+        if t_star is not None:
+            ax.axvline(t_star, color="red", lw=2, label=f"t_lo*={t_star:.4f}")
+            ax.legend(loc="lower right", fontsize=7)
+    else:
+        ax.plot([0.9, 1.0], [0.9, 1.0], "k--", alpha=0.5, linewidth=1)
+        ax.set_xlim(0.9, 1.0)
+        ax.set_xlabel("u")
+        ax.set_title("ECDF near upper")
+        if t_star is not None:
+            ax.axvline(1 - t_star, color="red", lw=2, label=f"t_hi*={t_star:.4f}")
+            ax.legend(loc="lower right", fontsize=7)
+    ax.set_ylabel("ECDF")
+    ax.grid(True, alpha=0.3)
+
+
+def _overview_interior_mass(ax, interior_result: InteriorResult) -> None:
+    """Interior mass curve (log-x) with eps* marker."""
+    if len(interior_result.eps_grid) == 0:
+        ax.axis("off")
+        ax.text(0.5, 0.5, "No mass curve", ha="center", va="center", transform=ax.transAxes)
+        return
+    ax.semilogx(interior_result.eps_grid, interior_result.mass_curve, color="#2166ac", linewidth=2)
+    ax.set_xlabel("epsilon (log scale)")
+    ax.set_ylabel("P(z < epsilon)")
+    ax.set_title("Interior mass curve")
+    ax.grid(True, alpha=0.3)
+    if interior_result.eps_star is not None:
+        ax.axvline(
+            interior_result.eps_star,
+            color="red",
+            lw=2,
+            ls=":",
+            label=f"eps*={interior_result.eps_star:.2e}",
+        )
+        ax.legend(loc="lower right", fontsize=7)
+
+
+def _overview_spacing(
+    ax,
+    x_sorted: np.ndarray,
+    L: float,
+    U: float,
+    tols: np.ndarray,
+    cmap,
+    q_max: float = 0.15,
+    n_quantiles: int = 100,
+) -> None:
+    """Simplified quantile-spacing overlay."""
+    norm = Normalize(vmin=tols[0], vmax=tols[-1])
+    alphas = np.linspace(1.0, 0.3, len(tols))
+    for i, tol in enumerate(tols):
+        margin = tol * (U - L)
+        x_filt = x_sorted[(x_sorted > L + margin) & (x_sorted < U - margin)]
+        n_filt = len(x_filt)
+        max_idx = int(q_max * n_filt)
+        if max_idx < 2:
+            continue
+        n_q = min(n_quantiles, max_idx)
+        q_indices = np.linspace(0, max_idx - 1, n_q).astype(int)
+        quantiles = x_filt[q_indices]
+        dq = np.diff(quantiles)
+        if len(dq) == 0:
+            continue
+        ax.plot(np.arange(len(dq)), dq, color=cmap(norm(tol)), alpha=alphas[i], linewidth=1.5)
+    ax.set_xlabel("Quantile index")
+    ax.set_ylabel("dq")
+    ax.set_title(f"Spacing in lowest q={q_max:.2g}")
+    ax.grid(True, alpha=0.3)
+
+
+def _overview_quantile_elbow_panel(
+    ax,
+    elbows: dict,
+    t_star: float | None,
+    label: str,
+    cmap,
+) -> None:
+    """Simplified quantile-elbow panel for boundary or interior."""
+    if not elbows:
+        ax.axis("off")
+        ax.text(0.5, 0.5, "No quantile elbows", ha="center", va="center", transform=ax.transAxes)
+        return
+    valid = {q: e for q, e in elbows.items() if e is not None}
+    if not valid:
+        ax.text(
+            0.5,
+            0.5,
+            "All quantiles returned None",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+            fontsize=10,
+        )
+        ax.set_title(f"Quantile elbows ({label})")
+        return
+    sorted_q = sorted(valid.keys())
+    x_vals = np.array(sorted_q)
+    y_vals = np.array([valid[q] for q in sorted_q])
+    norm = Normalize(vmin=x_vals.min(), vmax=x_vals.max())
+    ax.plot(x_vals, y_vals, "k-", alpha=0.3, linewidth=1)
+    for q, eps in zip(x_vals, y_vals, strict=True):
+        ax.scatter([q], [eps], c=[cmap(norm(q))], s=40)
+    if t_star is not None and t_star > 0:
+        ax.axhline(
+            t_star,
+            color="red",
+            linestyle="--",
+            linewidth=1.5,
+            label=f"{label} t* = {t_star:.4f}",
+        )
+        ax.legend(loc="best", fontsize=7)
+    ax.set_yscale("log")
+    ax.set_xlabel("Quantile")
+    ax.set_ylabel("Elbow threshold")
+    ax.set_title(f"Quantile elbows ({label})")
+    ax.grid(True, alpha=0.3)
 
 
 def plot_parameter_overview(
@@ -2100,40 +2388,40 @@ def plot_parameter_overview(
     boundary_result: BoundaryResult,
     config: PlotConfig | None = None,
     tp_fn_status: str | None = None,
+    tols: np.ndarray | None = None,
 ) -> Figure:
-    """Single-page per-parameter overview for visual detection verification.
+    """Single-page 3x3 per-parameter overview.
 
-    Produces a 3x2 grid:
-    - Top-left: raw histogram (log-y) with L/U/x0 and detection-cut markers.
-    - Top-right: filtered histogram (log-y) with mask applied.
-    - Mid-left / mid-right: lower/upper boundary mass curves, zoomed.
-    - Bottom-left: interior z-histogram (symlog-y) with eps_star marker.
-    - Bottom-right: interior mass curve (log-x) with eps_star marker.
-
-    The filter semantics in the top-right panel replicate
-    ``fitqc.report._build_mask`` inline, so this plotter is self-contained
-    (no private-helper import).
+    Layout:
+        Row 1: raw+filtered overplot / boundary mass twinx / interior z-hist
+        Row 2: combined hist tolerance overlay / ECDF (both sides, sub-grid)
+               / interior mass curve
+        Row 3: quantile spacing / boundary quantile elbows
+               / interior quantile elbows
 
     Args:
-        param_name: Display name of the parameter (used in title).
-        x: Array of parameter values.
+        param_name: Display name (appears in title).
+        x: Parameter value array.
         x0: Optional interior stickiness center.
-        L: Lower bound.
-        U: Upper bound.
-        interior_result: Optional interior QC result. If None, interior panels
-            render a "no interior result" placeholder (e.g. when x0 is None).
+        L, U: Parameter bounds.
+        interior_result: Optional interior QC result. Interior panels show
+            placeholder text when None.
         boundary_result: Boundary QC result (required).
         config: PlotConfig for styling. Uses defaults if None.
-        tp_fn_status: Optional free-text status string appended to the title
-            (e.g. "TP/FN vs CSV: TP"). Driver supplies this after cross-
-            referencing the ground-truth CSV — library code stays decoupled
-            from that file.
+        tp_fn_status: Optional free-text status appended to the title
+            (e.g. "lower: TP | upper: TP"). Driver supplies after cross-
+            referencing ground-truth CSV.
+        tols: Tolerance grid for the tolerance-sweep panels (combined
+            hist overlay, ECDF, spacing). Defaults to
+            ``np.array([0.0, 0.005, 0.01, 0.02, 0.03, 0.05])``.
 
     Returns:
-        Figure (3x2 grid) with a title row and a footer of detection summary.
+        Figure sized 15x15 containing 9 panels (10 axes counting the twinx).
     """
     if config is None:
         config = PlotConfig()
+    if tols is None:
+        tols = np.array([0.0, 0.005, 0.01, 0.02, 0.03, 0.05])
 
     x_clean = x[np.isfinite(x)]
     n_total = int(len(x_clean))
@@ -2156,129 +2444,143 @@ def plot_parameter_overview(
     n_kept = int(keep.sum())
     x_filtered = x_clean[keep]
 
-    fig, axes = plt.subplots(3, 2, figsize=(14, 14), dpi=config.dpi)
-    ax_raw, ax_filt = axes[0]
-    ax_mass_lo, ax_mass_hi = axes[1]
-    ax_ihist, ax_imass = axes[2]
+    cmap = plt.get_cmap(config.cmap)
 
-    bin_edges = np.linspace(L, U, 101)
+    fig = plt.figure(figsize=(15, 15), dpi=config.dpi)
+    gs = fig.add_gridspec(3, 3, hspace=0.45, wspace=0.35)
 
-    # Panel 1: raw histogram with all cut markers
-    if n_total > 0:
-        ax_raw.hist(x_clean, bins=bin_edges, color="#808080", alpha=0.7, edgecolor="none")
-    ax_raw.set_yscale("log")
-    ax_raw.set_xlabel("Parameter value")
-    ax_raw.set_ylabel("Count")
-    ax_raw.set_title(f"Raw histogram (n={n_total})")
-    ax_raw.axvline(L, color="black", lw=1, label=f"L={L:.3g}")
-    ax_raw.axvline(U, color="black", lw=1, label=f"U={U:.3g}")
-    if x0 is not None:
-        ax_raw.axvline(x0, color="green", lw=1.5, label=f"x0={x0:.3g}")
-    if boundary_result.t_lo_star is not None:
-        ax_raw.axvline(
-            L + boundary_result.t_lo_star * (U - L),
-            color="red",
-            lw=2,
-            ls=":",
-            label=f"t_lo*={boundary_result.t_lo_star:.4f}",
-        )
-    if boundary_result.t_hi_star is not None:
-        ax_raw.axvline(
-            U - boundary_result.t_hi_star * (U - L),
-            color="red",
-            lw=2,
-            ls=":",
-            label=f"t_hi*={boundary_result.t_hi_star:.4f}",
-        )
-    if interior_result is not None and interior_result.eps_star is not None and x0 is not None:
-        half_width = interior_result.eps_star * max(x0 - L, U - x0)
-        ax_raw.axvline(x0 - half_width, color="orange", lw=1.5, ls="--", alpha=0.7)
-        ax_raw.axvline(
-            x0 + half_width,
-            color="orange",
-            lw=1.5,
-            ls="--",
-            alpha=0.7,
-            label=f"eps*={interior_result.eps_star:.2e}",
-        )
-    ax_raw.grid(True, alpha=0.3)
-    ax_raw.legend(loc="upper right", fontsize=8)
+    # Row 1
+    ax_r1c1 = fig.add_subplot(gs[0, 0])
+    _overview_overplot_hist(
+        ax_r1c1, x_clean, x_filtered, n_total, n_kept, x0, L, U, boundary_result, interior_result
+    )
 
-    # Panel 2: filtered histogram
-    if n_kept > 0:
-        ax_filt.hist(x_filtered, bins=bin_edges, color="#2166ac", alpha=0.7, edgecolor="none")
-    ax_filt.set_yscale("log")
-    ax_filt.set_xlabel("Parameter value")
-    ax_filt.set_ylabel("Count")
-    ax_filt.set_title(f"Filtered histogram (kept {n_kept} of {n_total})")
-    ax_filt.axvline(L, color="black", lw=1)
-    ax_filt.axvline(U, color="black", lw=1)
-    ax_filt.grid(True, alpha=0.3)
+    ax_r1c2 = fig.add_subplot(gs[0, 1])
+    _overview_boundary_twinx(ax_r1c2, boundary_result)
 
-    # Panels 3, 4: boundary mass curves (zoomed)
-    _draw_boundary_mass_panel(ax_mass_lo, boundary_result, side="lower")
-    _draw_boundary_mass_panel(ax_mass_hi, boundary_result, side="upper")
-
-    # Panels 5, 6: interior
+    ax_r1c3 = fig.add_subplot(gs[0, 2])
     if interior_result is not None:
-        ihe = interior_result.hist_edges
-        if len(ihe) > 1:
-            bin_centers = (ihe[:-1] + ihe[1:]) / 2
-            ax_ihist.bar(
-                bin_centers,
-                interior_result.hist_counts,
-                width=ihe[1] - ihe[0],
-                color="#2166ac",
-                alpha=0.7,
-                edgecolor="none",
-            )
-        ax_ihist.set_yscale("symlog", linthresh=1)
-        ax_ihist.set_xlabel("z")
-        ax_ihist.set_ylabel("Count")
-        ax_ihist.set_title("Interior z-histogram")
-        if interior_result.eps_star is not None:
-            ax_ihist.axvline(
-                interior_result.eps_star,
-                color="red",
-                lw=2,
-                ls=":",
-                label=f"eps*={interior_result.eps_star:.2e}",
-            )
-            ax_ihist.legend(loc="upper right", fontsize=8)
-        ax_ihist.grid(True, alpha=0.3)
-
-        if len(interior_result.eps_grid) > 0:
-            ax_imass.semilogx(
-                interior_result.eps_grid,
-                interior_result.mass_curve,
-                color="#2166ac",
-                linewidth=2,
-            )
-        ax_imass.set_xlabel("epsilon (log scale)")
-        ax_imass.set_ylabel("P(z < epsilon)")
-        ax_imass.set_title("Interior mass curve")
-        if interior_result.eps_star is not None:
-            ax_imass.axvline(
-                interior_result.eps_star,
-                color="red",
-                lw=2,
-                ls=":",
-                label=f"eps*={interior_result.eps_star:.2e}",
-            )
-            ax_imass.legend(loc="lower right", fontsize=8)
-        ax_imass.grid(True, alpha=0.3)
+        _overview_interior_zhist(ax_r1c3, interior_result)
     else:
-        for ax_empty in (ax_ihist, ax_imass):
-            ax_empty.axis("off")
-            ax_empty.text(
-                0.5,
-                0.5,
-                "No interior result (x0=None)",
-                ha="center",
-                va="center",
-                transform=ax_empty.transAxes,
-                fontsize=12,
+        ax_r1c3.axis("off")
+        ax_r1c3.text(
+            0.5,
+            0.5,
+            "No interior result",
+            ha="center",
+            va="center",
+            transform=ax_r1c3.transAxes,
+            fontsize=11,
+        )
+
+    # Row 2
+    ax_r2c1 = fig.add_subplot(gs[1, 0])
+    plot_histogram_tolerance_overlays_combined(
+        x=x_clean,
+        L=L,
+        U=U,
+        tols=tols,
+        bins=100,
+        config=config,
+        x0=x0,
+        eps_star=interior_result.eps_star if interior_result is not None else None,
+        t_lo_star=boundary_result.t_lo_star,
+        t_hi_star=boundary_result.t_hi_star,
+        ax=ax_r2c1,
+    )
+    ax_r2c1.set_title("Histogram at symmetric tolerance cuts")
+
+    ecdf_subgs = gs[1, 1].subgridspec(2, 1, hspace=0.45)
+    ax_ecdf_lo = fig.add_subplot(ecdf_subgs[0])
+    ax_ecdf_hi = fig.add_subplot(ecdf_subgs[1])
+    if U > L:
+        u_values = (x_clean - L) / (U - L)
+        _overview_ecdf_side(ax_ecdf_lo, u_values, "lower", tols, boundary_result.t_lo_star, cmap)
+        _overview_ecdf_side(ax_ecdf_hi, u_values, "upper", tols, boundary_result.t_hi_star, cmap)
+
+    ax_r2c3 = fig.add_subplot(gs[1, 2])
+    if interior_result is not None:
+        _overview_interior_mass(ax_r2c3, interior_result)
+    else:
+        ax_r2c3.axis("off")
+        ax_r2c3.text(
+            0.5,
+            0.5,
+            "No interior result",
+            ha="center",
+            va="center",
+            transform=ax_r2c3.transAxes,
+            fontsize=11,
+        )
+
+    # Row 3
+    ax_r3c1 = fig.add_subplot(gs[2, 0])
+    if n_total > 0:
+        x_sorted = np.sort(x_clean)
+        _overview_spacing(ax_r3c1, x_sorted, L, U, tols, cmap)
+    else:
+        ax_r3c1.axis("off")
+
+    ax_r3c2 = fig.add_subplot(gs[2, 1])
+    boundary_elbows = boundary_result.quantile_elbows or {}
+    lower_elbows = boundary_elbows.get("lower", {}) if isinstance(boundary_elbows, dict) else {}
+    upper_elbows = boundary_elbows.get("upper", {}) if isinstance(boundary_elbows, dict) else {}
+    _overview_quantile_elbow_panel(
+        ax_r3c2,
+        lower_elbows,
+        boundary_result.t_lo_star,
+        "lower",
+        cmap,
+    )
+    if upper_elbows:
+        # Overlay upper elbows on the same panel with distinct marker
+        valid_upper = {q: e for q, e in upper_elbows.items() if e is not None}
+        if valid_upper:
+            sorted_q = sorted(valid_upper.keys())
+            x_vals = np.array(sorted_q)
+            y_vals = np.array([valid_upper[q] for q in sorted_q])
+            ax_r3c2.plot(
+                x_vals,
+                y_vals,
+                color="#d62728",
+                marker="x",
+                linestyle="-",
+                alpha=0.6,
+                linewidth=1,
+                markersize=7,
+                label="upper",
             )
+            if boundary_result.t_hi_star is not None:
+                ax_r3c2.axhline(
+                    boundary_result.t_hi_star,
+                    color="#d62728",
+                    linestyle=":",
+                    linewidth=1.5,
+                    label=f"upper t* = {boundary_result.t_hi_star:.4f}",
+                )
+            ax_r3c2.legend(loc="best", fontsize=7)
+            ax_r3c2.set_title("Quantile elbows (boundary)")
+
+    ax_r3c3 = fig.add_subplot(gs[2, 2])
+    if interior_result is not None and interior_result.quantile_elbows is not None:
+        _overview_quantile_elbow_panel(
+            ax_r3c3,
+            interior_result.quantile_elbows,
+            interior_result.eps_star,
+            "interior",
+            cmap,
+        )
+    else:
+        ax_r3c3.axis("off")
+        ax_r3c3.text(
+            0.5,
+            0.5,
+            "No interior quantile elbows",
+            ha="center",
+            va="center",
+            transform=ax_r3c3.transAxes,
+            fontsize=10,
+        )
 
     x0_str = f"{x0:.3g}" if x0 is not None else "None"
     title_parts = [f"{param_name}", f"L={L:.3g}", f"U={U:.3g}", f"x0={x0_str}"]
@@ -2295,14 +2597,7 @@ def plot_parameter_overview(
     if interior_result is not None:
         footer_parts.append(f"eps*={interior_result.eps_star}")
         footer_parts.append(f"spike_detected={interior_result.spike_detected}")
-    fig.text(
-        0.5,
-        0.005,
-        "   ".join(footer_parts),
-        ha="center",
-        va="bottom",
-        fontsize=9,
-    )
+    fig.text(0.5, 0.005, "   ".join(footer_parts), ha="center", va="bottom", fontsize=9)
 
     fig.tight_layout(rect=[0, 0.02, 1, 0.97])
     return fig
