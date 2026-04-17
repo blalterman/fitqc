@@ -491,9 +491,18 @@ def plot_quantile_spacing_overlays(
 
     # Labels and title
     ax.set_xlabel("Quantile index")
-    ax.set_ylabel("Spacing (dq)")
-    ax.set_title("Quantile spacing near lower tail")
+    ax.set_ylabel("Spacing dq = |x[i+1] - x[i]|")
+    ax.set_title(f"Spacing dq between adjacent samples in the lowest q={q_max:.2g} of values")
     ax.grid(True, alpha=0.3)
+    ax.annotate(
+        "Compression (smaller dq) = pileup; Expansion (larger dq) = gap",
+        xy=(0.98, 0.98),
+        xycoords="axes fraction",
+        ha="right",
+        va="top",
+        fontsize=9,
+        bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray", alpha=0.8),
+    )
 
     # Apply tight_layout before adding colorbar
     fig.tight_layout()
