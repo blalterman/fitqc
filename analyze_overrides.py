@@ -1,8 +1,8 @@
 #!/usr/bin/env python
-"""Analyze M1/M2/M3 override effects on PPA12 boundary QC.
+"""Analyze M2/M3 override effects on PPA12 boundary QC.
 
-Full 2^3 factorial experiment: run boundary QC on all 12 PPA12 datasets
-under 8 configurations (all combinations of M1/M3/M2 on/off).
+Full 2^2 factorial experiment: run boundary QC on all 12 PPA12 datasets
+under 4 configurations (all combinations of M3/M2 on/off).
 
 Analysis-only — does NOT modify boundary.py or any production code.
 Override disabling uses source-string monkey-patching via exec().
@@ -48,35 +48,21 @@ CONFIG = BoundaryConfig(
 
 CONFIG_LABELS = [
     "all-on",
-    "M1-off",
     "M3-off",
     "M2-off",
-    "M1+M3-off",
-    "M1+M2-off",
-    "M2+M3-off",
     "all-off",
 ]
 
 # Pairs that differ in exactly one override, for marginal-effect analysis.
 # Each pair is (override-on config, override-off config).
 MARGINAL_PAIRS = {
-    "M1": [
-        ("all-on", "M1-off"),
-        ("M3-off", "M1+M3-off"),
-        ("M2-off", "M1+M2-off"),
-        ("M2+M3-off", "all-off"),
-    ],
     "M3": [
         ("all-on", "M3-off"),
-        ("M1-off", "M1+M3-off"),
-        ("M2-off", "M2+M3-off"),
-        ("M1+M2-off", "all-off"),
+        ("M2-off", "all-off"),
     ],
     "M2": [
         ("all-on", "M2-off"),
-        ("M1-off", "M1+M2-off"),
-        ("M3-off", "M2+M3-off"),
-        ("M1+M3-off", "all-off"),
+        ("M3-off", "all-off"),
     ],
 }
 
@@ -143,7 +129,6 @@ def _find_block_ranges(lines):
     Returns dict mapping block name to (start_idx, end_idx) where
     start_idx is inclusive and end_idx is exclusive.
     """
-    m1_start = next(i for i, ln in enumerate(lines) if "\u2014 spread-pileup" in ln)
     m3_start = next(i for i, ln in enumerate(lines) if "\u2014 broad-pileup" in ln)
     m3_end = next(
         i
@@ -155,7 +140,6 @@ def _find_block_ranges(lines):
         i for i, ln in enumerate(lines) if "return BoundaryResult(" in ln and i > m2_start
     )
     return {
-        "M1": (m1_start, m3_start),
         "M3": (m3_start, m3_end),
         "M2": (m2_start, m2_end),
     }
@@ -173,7 +157,7 @@ def _make_variant(lines, ranges, disable):
 
 
 def build_variants():
-    """Create 8 function variants for the factorial design.
+    """Create 4 function variants for the factorial design.
 
     Returns dict mapping config label to callable.
     """
@@ -183,13 +167,9 @@ def build_variants():
 
     configs = {
         "all-on": [],
-        "M1-off": ["M1"],
         "M3-off": ["M3"],
         "M2-off": ["M2"],
-        "M1+M3-off": ["M1", "M3"],
-        "M1+M2-off": ["M1", "M2"],
-        "M2+M3-off": ["M2", "M3"],
-        "all-off": ["M1", "M3", "M2"],
+        "all-off": ["M3", "M2"],
     }
 
     variants = {}
@@ -212,7 +192,7 @@ def build_variants():
 
 
 def run_experiments():
-    """Run all 96 experiments (12 datasets x 8 configs)."""
+    """Run all 48 experiments (12 datasets x 4 configs)."""
     datasets = load_datasets()
     variants = build_variants()
 
@@ -303,7 +283,7 @@ def fmt(v):
 def format_summary(verdicts):
     """Summary counts per override."""
     lines = ["## Summary", ""]
-    for override in ["M1", "M3", "M2"]:
+    for override in ["M3", "M2"]:
         counts = {
             "helps": 0,
             "hurts": 0,
@@ -346,7 +326,7 @@ def format_verdict_table(verdicts):
         "| Override | Parameter | Side | Verdict |",
         "|----------|-----------|------|---------|",
     ]
-    for override in ["M1", "M3", "M2"]:
+    for override in ["M3", "M2"]:
         for name in PARAMS:
             for side in ["lower", "upper"]:
                 v = verdicts[(override, name, side)]
@@ -364,7 +344,7 @@ def format_marginal_details(marginal_effects, results, datasets):
         "Shows detection and threshold changes when toggling each override.",
         "",
     ]
-    for override in ["M1", "M3", "M2"]:
+    for override in ["M3", "M2"]:
         lines.append(f"### {override}")
         lines.append("")
         for name in PARAMS:
@@ -422,16 +402,16 @@ def format_comparison_table(results):
 
 
 def main():
-    print("Running 96 experiments (12 datasets x 8 configs)...", flush=True)
+    print("Running 48 experiments (12 datasets x 4 configs)...", flush=True)
     results, datasets = run_experiments()
 
     print("\nComputing verdicts...", flush=True)
     marginal_effects, verdicts, interactions = compute_verdicts(results, datasets)
 
     sections = [
-        "# Override Review Results (M1/M2/M3)",
+        "# Override Review Results (M2/M3)",
         "",
-        "Full 2^3 factorial experiment on 12 PPA12 datasets.",
+        "Full 2^2 factorial experiment on 12 PPA12 datasets.",
         "All configs use `refine_transition=True, use_quantile_analysis=True, "
         "grid_mode='progressive'`.",
         "",
