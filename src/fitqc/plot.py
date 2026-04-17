@@ -2461,7 +2461,10 @@ def _draw_elbow_family(
         label=f"{label_prefix} tol(q)",
     )
 
-    if t_raw is not None and t_raw > 0:
+    if t_raw is not None:
+        # Interpolate the quantile position where the curve reaches t_raw.
+        # When y_vals is not monotonically increasing np.interp still returns
+        # a sensible result at the nearest edge; t_raw=0 maps to x_vals[0].
         q_elbow = float(np.interp(t_raw, y_vals, x_vals))
         ax.scatter(
             [q_elbow],
@@ -2483,7 +2486,7 @@ def _draw_elbow_family(
             label=f"{label_prefix} t_raw={t_raw:.4f}",
         )
 
-    if t_star is not None and t_star > 0:
+    if t_star is not None:
         ax.axhline(
             t_star,
             color=color,
