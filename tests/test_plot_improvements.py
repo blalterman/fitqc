@@ -192,10 +192,13 @@ def test_histogram_tolerance_overlays_combined_accepts_external_ax():
 
 
 def test_parameter_overview_smoke():
-    """S4: 3x3 overview renders for both interior_result paths.
+    """T3: 3x3 overview renders for both interior_result paths.
 
-    The 3x3 grid plus the twinx on the boundary-mass panel plus the
-    sub-gridspec (2 mini panels) in the ECDF cell yields 11 Axes total.
+    Axes count depends on whether interior quantile elbows are populated:
+    - Interior with quantile_elbows: 3x3 (=9) + boundary twinx (+1) +
+      combined-elbows twinx (+1) + embedded hist colorbar (+1) = 12.
+    - Interior without quantile_elbows (the _mock_interior_result default)
+      or no interior at all: 11 (the combined-elbows twinx is skipped).
     """
     rng = np.random.default_rng(3)
     L, U = 0.0, 1.0
@@ -203,9 +206,9 @@ def test_parameter_overview_smoke():
     x = np.concatenate([rng.uniform(L, U, size=900), np.zeros(100)])
 
     br = _mock_boundary_result(t_lo_star=0.01, t_hi_star=0.01)
-    ir = _mock_interior_result()
+    ir = _mock_interior_result()  # no quantile_elbows populated
 
-    fig_populated = plot_parameter_overview(
+    fig_mock_interior = plot_parameter_overview(
         param_name="synthetic",
         x=x,
         x0=x0,
@@ -216,10 +219,8 @@ def test_parameter_overview_smoke():
         config=PlotConfig(),
         tp_fn_status="lower: TP | upper: TP",
     )
-    # 3x3 (=9) + twinx on boundary (+1) + ECDF sub-gridspec (+1) + combined
-    # hist overlay colorbar (+1) = 12
-    assert len(fig_populated.axes) == 12
-    plt.close(fig_populated)
+    assert len(fig_mock_interior.axes) == 11
+    plt.close(fig_mock_interior)
 
     fig_none = plot_parameter_overview(
         param_name="synthetic_no_interior",
@@ -231,6 +232,34 @@ def test_parameter_overview_smoke():
         boundary_result=br,
         config=PlotConfig(),
     )
-    # Same axis count - interior panels render placeholder text but still occupy their Axes slots.
-    assert len(fig_none.axes) == 12
+    assert len(fig_none.axes) == 11
     plt.close(fig_none)
+
+    # Interior with quantile_elbows populated -> combined-elbows twinx adds one axes
+    ir_with_elbows = InteriorResult(
+        spike_detected=True,
+        spike_z_loc=0.05,
+        eps_star=0.01,
+        eps_grid=np.logspace(-6, -1, 50),
+        mass_curve=np.linspace(0.01, 0.5, 50),
+        hist_counts=np.random.default_rng(4).integers(0, 100, size=100).astype(float),
+        hist_edges=np.linspace(0, 1, 101),
+        quantile_elbows={0.1: 0.01, 0.2: 0.012, 0.3: 0.015},
+    )
+    br_with_elbows = _mock_boundary_result()
+    br_with_elbows.quantile_elbows = {
+        "lower": {0.1: 0.01, 0.2: 0.012, 0.3: 0.015},
+        "upper": {0.1: 0.008, 0.2: 0.01, 0.3: 0.012},
+    }
+    fig_full = plot_parameter_overview(
+        param_name="full",
+        x=x,
+        x0=x0,
+        L=L,
+        U=U,
+        interior_result=ir_with_elbows,
+        boundary_result=br_with_elbows,
+        config=PlotConfig(),
+    )
+    assert len(fig_full.axes) == 12
+    plt.close(fig_full)
