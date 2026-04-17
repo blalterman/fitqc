@@ -746,6 +746,7 @@ def plot_histogram_tolerance_overlays(
     ax_lower.set_ylabel("Count")
     ax_lower.set_title("Lower cuts: x > L + tol*(U-L)")
     ax_lower.grid(True, alpha=0.3)
+    ax_lower.set_yscale("log")
 
     # Right subplot: upper cuts
     ax_upper = axes[1]
@@ -771,6 +772,7 @@ def plot_histogram_tolerance_overlays(
     ax_upper.set_ylabel("Count")
     ax_upper.set_title("Upper cuts: x < U - tol*(U-L)")
     ax_upper.grid(True, alpha=0.3)
+    ax_upper.set_yscale("log")
 
     # Apply tight_layout before adding colorbar
     fig.tight_layout()
