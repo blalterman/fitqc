@@ -1029,6 +1029,10 @@ def plot_histogram_tolerance_overlays_combined(
             cax = divider.append_axes("right", size="3%", pad=0.05)
             cbar = fig.colorbar(sm, cax=cax, orientation="vertical")
             cbar.set_label("Tolerance")
+        # Show each sampled tolerance as a tick mark on the colorbar so the
+        # viewer can map between discrete histogram layers and the color ramp.
+        cbar.set_ticks(list(tols))
+        cbar.ax.tick_params(labelsize=7)
 
     return fig
 
@@ -2551,8 +2555,12 @@ def plot_parameter_overview(
             (e.g. "lower: TP | upper: TP"). Driver supplies after cross-
             referencing ground-truth CSV.
         tols: Tolerance grid for the tolerance-sweep panels (combined
-            hist overlay, ECDF, spacing). Defaults to
-            ``np.array([0.0, 0.005, 0.01, 0.02, 0.03, 0.05])``.
+            hist overlay, ECDF, spacing). Defaults to a 12-point
+            progressive grid that matches the detection code's
+            piecewise-linear emphasis on the [0, 0.005] region where
+            most pileups live:
+            ``[0, 0.0002, 0.0005, 0.001, 0.002, 0.003, 0.005, 0.008,
+            0.01, 0.02, 0.03, 0.05]``.
 
     Returns:
         Figure sized 15x15. Axes count = 9 panels + 1 boundary-mass twinx
@@ -2562,7 +2570,11 @@ def plot_parameter_overview(
     if config is None:
         config = PlotConfig()
     if tols is None:
-        tols = np.array([0.0, 0.005, 0.01, 0.02, 0.03, 0.05])
+        # Progressive grid (denser near 0) matching the detection code's
+        # "progressive" grid_mode in src/fitqc/boundary.py:_build_tolerance_grid.
+        tols = np.array(
+            [0.0, 0.0002, 0.0005, 0.001, 0.002, 0.003, 0.005, 0.008, 0.01, 0.02, 0.03, 0.05]
+        )
 
     x_clean = x[np.isfinite(x)]
     n_total = int(len(x_clean))
