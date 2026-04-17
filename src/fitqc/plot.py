@@ -19,7 +19,7 @@ import numpy as np
 from matplotlib.colors import Normalize
 from matplotlib.figure import Figure
 
-from fitqc.boundary import BoundaryResult
+from fitqc.boundary import BoundaryResult, compute_u
 from fitqc.config import PlotConfig
 from fitqc.interior import InteriorResult, compute_z
 
@@ -1885,3 +1885,290 @@ def _plot_boundary_panel(
     ax.grid(True, alpha=0.3)
 
     ax.legend(loc="best", fontsize=8)
+
+
+def _draw_boundary_mass_panel(
+    ax,
+    result: BoundaryResult,
+    side: Literal["lower", "upper"],
+) -> None:
+    """Draw a single boundary mass-curve panel with B2-style auto-zoom.
+
+    Replicates the zoom logic from plot_boundary_diagnostics so the overview
+    panels share the same scaling. Inlined (rather than shared) to keep the
+    overview self-contained — the main boundary plot has additional colorbar
+    and two-panel layout concerns that don't apply here.
+    """
+    tol_grid = result.tol_grid
+    if side == "lower":
+        mass_curve = result.lower_mass_curve
+        t_star = result.t_lo_star
+        label_mass = "P(u < tol)"
+        title = "Lower boundary mass curve"
+        marker_label = "t_lo*"
+    else:
+        mass_curve = result.upper_mass_curve
+        t_star = result.t_hi_star
+        label_mass = "P(u > 1-tol)"
+        title = "Upper boundary mass curve"
+        marker_label = "t_hi*"
+
+    if len(tol_grid) == 0:
+        ax.axis("off")
+        ax.text(
+            0.5,
+            0.5,
+            "No mass-curve data",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+            fontsize=10,
+        )
+        return
+
+    ax.plot(tol_grid, mass_curve, color="#2166ac", linewidth=2)
+    ax.plot(tol_grid, tol_grid, "k--", alpha=0.5, linewidth=1, label="Uniform (P = tol)")
+    ax.set_xlabel("Tolerance (tol)")
+    ax.set_ylabel(label_mass)
+    ax.set_title(title)
+    ax.grid(True, alpha=0.3)
+
+    if t_star is not None:
+        ax.axvline(
+            t_star,
+            color="red",
+            linestyle=":",
+            linewidth=2,
+            label=f"{marker_label} = {t_star:.4f}",
+        )
+
+    t_for_zoom = t_star if t_star is not None else 0.0
+    x_max = max(t_for_zoom * 4, result.pileup_threshold * 4)
+    if x_max > 0:
+        in_range = tol_grid <= x_max
+        if in_range.any():
+            mass_in = mass_curve[in_range]
+            uniform_in = tol_grid[in_range]
+            y_max = 1.2 * max(float(mass_in.max()), 1.5 * float(uniform_in.max()))
+            ax.set_xlim(0, x_max)
+            ax.set_ylim(0, y_max)
+
+    ax.legend(loc="lower right", fontsize=8)
+
+
+def plot_parameter_overview(
+    param_name: str,
+    x: np.ndarray,
+    x0: float | None,
+    L: float,
+    U: float,
+    interior_result: InteriorResult | None,
+    boundary_result: BoundaryResult,
+    config: PlotConfig | None = None,
+    tp_fn_status: str | None = None,
+) -> Figure:
+    """Single-page per-parameter overview for visual detection verification.
+
+    Produces a 3x2 grid:
+    - Top-left: raw histogram (log-y) with L/U/x0 and detection-cut markers.
+    - Top-right: filtered histogram (log-y) with mask applied.
+    - Mid-left / mid-right: lower/upper boundary mass curves, zoomed.
+    - Bottom-left: interior z-histogram (symlog-y) with eps_star marker.
+    - Bottom-right: interior mass curve (log-x) with eps_star marker.
+
+    The filter semantics in the top-right panel replicate
+    ``fitqc.report._build_mask`` inline, so this plotter is self-contained
+    (no private-helper import).
+
+    Args:
+        param_name: Display name of the parameter (used in title).
+        x: Array of parameter values.
+        x0: Optional interior stickiness center.
+        L: Lower bound.
+        U: Upper bound.
+        interior_result: Optional interior QC result. If None, interior panels
+            render a "no interior result" placeholder (e.g. when x0 is None).
+        boundary_result: Boundary QC result (required).
+        config: PlotConfig for styling. Uses defaults if None.
+        tp_fn_status: Optional free-text status string appended to the title
+            (e.g. "TP/FN vs CSV: TP"). Driver supplies this after cross-
+            referencing the ground-truth CSV — library code stays decoupled
+            from that file.
+
+    Returns:
+        Figure (3x2 grid) with a title row and a footer of detection summary.
+    """
+    if config is None:
+        config = PlotConfig()
+
+    x_clean = x[np.isfinite(x)]
+    n_total = int(len(x_clean))
+
+    keep = np.ones(n_total, dtype=bool)
+    if (
+        interior_result is not None
+        and interior_result.spike_detected
+        and interior_result.eps_star is not None
+        and x0 is not None
+    ):
+        z_all = compute_z(x_clean, x0, L, U)
+        keep &= ~(z_all < interior_result.eps_star)
+    if boundary_result.lower_pileup_detected and boundary_result.t_lo_star is not None:
+        u_all = compute_u(x_clean, L, U)
+        keep &= ~(u_all < boundary_result.t_lo_star)
+    if boundary_result.upper_pileup_detected and boundary_result.t_hi_star is not None:
+        u_all = compute_u(x_clean, L, U)
+        keep &= ~((1 - u_all) < boundary_result.t_hi_star)
+    n_kept = int(keep.sum())
+    x_filtered = x_clean[keep]
+
+    fig, axes = plt.subplots(3, 2, figsize=(14, 14), dpi=config.dpi)
+    ax_raw, ax_filt = axes[0]
+    ax_mass_lo, ax_mass_hi = axes[1]
+    ax_ihist, ax_imass = axes[2]
+
+    bin_edges = np.linspace(L, U, 101)
+
+    # Panel 1: raw histogram with all cut markers
+    if n_total > 0:
+        ax_raw.hist(x_clean, bins=bin_edges, color="#808080", alpha=0.7, edgecolor="none")
+    ax_raw.set_yscale("log")
+    ax_raw.set_xlabel("Parameter value")
+    ax_raw.set_ylabel("Count")
+    ax_raw.set_title(f"Raw histogram (n={n_total})")
+    ax_raw.axvline(L, color="black", lw=1, label=f"L={L:.3g}")
+    ax_raw.axvline(U, color="black", lw=1, label=f"U={U:.3g}")
+    if x0 is not None:
+        ax_raw.axvline(x0, color="green", lw=1.5, label=f"x0={x0:.3g}")
+    if boundary_result.t_lo_star is not None:
+        ax_raw.axvline(
+            L + boundary_result.t_lo_star * (U - L),
+            color="red",
+            lw=2,
+            ls=":",
+            label=f"t_lo*={boundary_result.t_lo_star:.4f}",
+        )
+    if boundary_result.t_hi_star is not None:
+        ax_raw.axvline(
+            U - boundary_result.t_hi_star * (U - L),
+            color="red",
+            lw=2,
+            ls=":",
+            label=f"t_hi*={boundary_result.t_hi_star:.4f}",
+        )
+    if interior_result is not None and interior_result.eps_star is not None and x0 is not None:
+        half_width = interior_result.eps_star * max(x0 - L, U - x0)
+        ax_raw.axvline(x0 - half_width, color="orange", lw=1.5, ls="--", alpha=0.7)
+        ax_raw.axvline(
+            x0 + half_width,
+            color="orange",
+            lw=1.5,
+            ls="--",
+            alpha=0.7,
+            label=f"eps*={interior_result.eps_star:.2e}",
+        )
+    ax_raw.grid(True, alpha=0.3)
+    ax_raw.legend(loc="upper right", fontsize=8)
+
+    # Panel 2: filtered histogram
+    if n_kept > 0:
+        ax_filt.hist(x_filtered, bins=bin_edges, color="#2166ac", alpha=0.7, edgecolor="none")
+    ax_filt.set_yscale("log")
+    ax_filt.set_xlabel("Parameter value")
+    ax_filt.set_ylabel("Count")
+    ax_filt.set_title(f"Filtered histogram (kept {n_kept} of {n_total})")
+    ax_filt.axvline(L, color="black", lw=1)
+    ax_filt.axvline(U, color="black", lw=1)
+    ax_filt.grid(True, alpha=0.3)
+
+    # Panels 3, 4: boundary mass curves (zoomed)
+    _draw_boundary_mass_panel(ax_mass_lo, boundary_result, side="lower")
+    _draw_boundary_mass_panel(ax_mass_hi, boundary_result, side="upper")
+
+    # Panels 5, 6: interior
+    if interior_result is not None:
+        ihe = interior_result.hist_edges
+        if len(ihe) > 1:
+            bin_centers = (ihe[:-1] + ihe[1:]) / 2
+            ax_ihist.bar(
+                bin_centers,
+                interior_result.hist_counts,
+                width=ihe[1] - ihe[0],
+                color="#2166ac",
+                alpha=0.7,
+                edgecolor="none",
+            )
+        ax_ihist.set_yscale("symlog", linthresh=1)
+        ax_ihist.set_xlabel("z")
+        ax_ihist.set_ylabel("Count")
+        ax_ihist.set_title("Interior z-histogram")
+        if interior_result.eps_star is not None:
+            ax_ihist.axvline(
+                interior_result.eps_star,
+                color="red",
+                lw=2,
+                ls=":",
+                label=f"eps*={interior_result.eps_star:.2e}",
+            )
+            ax_ihist.legend(loc="upper right", fontsize=8)
+        ax_ihist.grid(True, alpha=0.3)
+
+        if len(interior_result.eps_grid) > 0:
+            ax_imass.semilogx(
+                interior_result.eps_grid,
+                interior_result.mass_curve,
+                color="#2166ac",
+                linewidth=2,
+            )
+        ax_imass.set_xlabel("epsilon (log scale)")
+        ax_imass.set_ylabel("P(z < epsilon)")
+        ax_imass.set_title("Interior mass curve")
+        if interior_result.eps_star is not None:
+            ax_imass.axvline(
+                interior_result.eps_star,
+                color="red",
+                lw=2,
+                ls=":",
+                label=f"eps*={interior_result.eps_star:.2e}",
+            )
+            ax_imass.legend(loc="lower right", fontsize=8)
+        ax_imass.grid(True, alpha=0.3)
+    else:
+        for ax_empty in (ax_ihist, ax_imass):
+            ax_empty.axis("off")
+            ax_empty.text(
+                0.5,
+                0.5,
+                "No interior result (x0=None)",
+                ha="center",
+                va="center",
+                transform=ax_empty.transAxes,
+                fontsize=12,
+            )
+
+    x0_str = f"{x0:.3g}" if x0 is not None else "None"
+    title_parts = [f"{param_name}", f"L={L:.3g}", f"U={U:.3g}", f"x0={x0_str}"]
+    if tp_fn_status is not None:
+        title_parts.append(tp_fn_status)
+    fig.suptitle("   ".join(title_parts), fontsize=14, y=0.995)
+
+    footer_parts = [
+        f"t_lo*={boundary_result.t_lo_star}",
+        f"t_hi*={boundary_result.t_hi_star}",
+        f"lower_pileup_detected={boundary_result.lower_pileup_detected}",
+        f"upper_pileup_detected={boundary_result.upper_pileup_detected}",
+    ]
+    if interior_result is not None:
+        footer_parts.append(f"eps*={interior_result.eps_star}")
+        footer_parts.append(f"spike_detected={interior_result.spike_detected}")
+    fig.text(
+        0.5,
+        0.005,
+        "   ".join(footer_parts),
+        ha="center",
+        va="bottom",
+        fontsize=9,
+    )
+
+    fig.tight_layout(rect=[0, 0.02, 1, 0.97])
+    return fig
