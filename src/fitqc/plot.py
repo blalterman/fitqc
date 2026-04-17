@@ -195,6 +195,17 @@ def plot_boundary_diagnostics(result: BoundaryResult, config: PlotConfig) -> Fig
 
     ax1.legend(loc="lower right")
 
+    t_lo_for_zoom = result.t_lo_star if result.t_lo_star is not None else 0.0
+    x_max_lo = max(t_lo_for_zoom * 4, result.pileup_threshold * 4)
+    if x_max_lo > 0 and len(result.tol_grid) > 0:
+        in_range = result.tol_grid <= x_max_lo
+        if in_range.any():
+            mass_in = result.lower_mass_curve[in_range]
+            uniform_in = result.tol_grid[in_range]
+            y_max_lo = 1.2 * max(float(mass_in.max()), 1.5 * float(uniform_in.max()))
+            ax1.set_xlim(0, x_max_lo)
+            ax1.set_ylim(0, y_max_lo)
+
     # Panel 2: Upper boundary mass curve
     ax2 = axes[1]
     colors_upper = [cmap(0.15 + 0.85 * norm(t)) for t in result.tol_grid]
@@ -239,6 +250,17 @@ def plot_boundary_diagnostics(result: BoundaryResult, config: PlotConfig) -> Fig
         ax2.scatter([result.t_hi_star], [mass_at_elbow], color="red", s=100, zorder=5)
 
     ax2.legend(loc="lower right")
+
+    t_hi_for_zoom = result.t_hi_star if result.t_hi_star is not None else 0.0
+    x_max_hi = max(t_hi_for_zoom * 4, result.pileup_threshold * 4)
+    if x_max_hi > 0 and len(result.tol_grid) > 0:
+        in_range = result.tol_grid <= x_max_hi
+        if in_range.any():
+            mass_in = result.upper_mass_curve[in_range]
+            uniform_in = result.tol_grid[in_range]
+            y_max_hi = 1.2 * max(float(mass_in.max()), 1.5 * float(uniform_in.max()))
+            ax2.set_xlim(0, x_max_hi)
+            ax2.set_ylim(0, y_max_hi)
 
     # Panel 3: Log magnitude panel (optional)
     if config.include_log_abs_panel:
