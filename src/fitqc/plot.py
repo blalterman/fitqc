@@ -2155,12 +2155,17 @@ def _overview_boundary_mass_side(
     result: BoundaryResult,
     side: Literal["lower", "upper"],
     config: PlotConfig,
+    yscale: Literal["linear", "log"] = "linear",
 ) -> None:
     """Single boundary-side mass-curve panel with tolerance-colored segments.
 
     Draws one side only (lower or upper) with per-segment color encoding
     the tolerance value, a tolerance colorbar appended via
     make_axes_locatable, and t_star marker + zoom logic.
+
+    yscale: "linear" (default) or "log". On log scale mass values are
+    floored to 1e-10 before plotting to avoid log(0) warnings and the
+    y-range is auto-scaled rather than clamped.
     """
     tol_grid = result.tol_grid
     if side == "lower":
@@ -2175,6 +2180,9 @@ def _overview_boundary_mass_side(
         title = "Upper boundary mass curve"
         ylabel = "P(u > 1-tol)"
         marker_label = "t_hi*"
+
+    if yscale == "log":
+        title = f"{title} (log y)"
 
     if len(tol_grid) == 0:
         ax.axis("off")
@@ -2193,16 +2201,18 @@ def _overview_boundary_mass_side(
     norm = Normalize(vmin=tol_grid[0], vmax=tol_grid[-1])
     seg_colors = [cmap(0.15 + 0.85 * norm(t)) for t in tol_grid]
 
+    plot_mass = np.maximum(mass_curve, 1e-10) if yscale == "log" else mass_curve
+
     for i in range(len(tol_grid) - 1):
         ax.plot(
             tol_grid[i : i + 2],
-            mass_curve[i : i + 2],
+            plot_mass[i : i + 2],
             color=seg_colors[i],
             linewidth=2,
         )
     ax.plot(
         tol_grid,
-        tol_grid,
+        np.maximum(tol_grid, 1e-10) if yscale == "log" else tol_grid,
         "k--",
         alpha=0.4,
         linewidth=1,
@@ -2227,18 +2237,27 @@ def _overview_boundary_mass_side(
     if x_max > 0:
         in_range = tol_grid <= x_max
         if in_range.any():
-            mass_in = mass_curve[in_range]
-            mass_max = float(mass_in.max())
-            # Zoom to the data - pad by 20% above mass_max. When the mass
-            # curve is nearly flat at zero (e.g. no detected pileup) fall
-            # back to a small positive ceiling so the uniform reference
-            # (y = tol, reaching x_max) stays visible.
-            uniform_max = float(tol_grid[in_range].max())
-            y_max = 1.2 * max(mass_max, 0.5 * uniform_max)
-            if y_max <= 0:
-                y_max = 0.01
             ax.set_xlim(0, x_max)
-            ax.set_ylim(0, y_max)
+            if yscale == "linear":
+                mass_in = mass_curve[in_range]
+                mass_max = float(mass_in.max())
+                uniform_max = float(tol_grid[in_range].max())
+                y_max = 1.2 * max(mass_max, 0.5 * uniform_max)
+                if y_max <= 0:
+                    y_max = 0.01
+                ax.set_ylim(0, y_max)
+            else:
+                # Log scale: auto-scale y but require a sensible lower bound
+                # so the floor (1e-10) doesn't dominate the vertical span.
+                ax.set_yscale("log")
+                mass_in_nonzero = mass_curve[in_range]
+                mass_in_nonzero = mass_in_nonzero[mass_in_nonzero > 0]
+                if len(mass_in_nonzero) > 0:
+                    y_min = max(float(mass_in_nonzero.min()) / 2, 1e-6)
+                    y_max = max(float(mass_curve[in_range].max()) * 2, 0.01)
+                    ax.set_ylim(y_min, min(y_max, 1.0))
+                else:
+                    ax.set_ylim(1e-6, 1.0)
 
     ax.legend(loc="best", fontsize=7)
 
@@ -2368,16 +2387,31 @@ def _overview_ecdf_side(
     ax.grid(True, alpha=0.3)
 
 
-def _overview_interior_mass(ax, interior_result: InteriorResult) -> None:
-    """Interior mass curve (log-x) with eps* marker."""
+def _overview_interior_mass(
+    ax,
+    interior_result: InteriorResult,
+    yscale: Literal["linear", "log"] = "linear",
+) -> None:
+    """Interior mass curve (log-x) with eps* marker.
+
+    yscale controls the y-axis only; x is always log (epsilon spans
+    many orders of magnitude). Linear y shows the absolute mass; log y
+    exposes small-tail structure.
+    """
     if len(interior_result.eps_grid) == 0:
         ax.axis("off")
         ax.text(0.5, 0.5, "No mass curve", ha="center", va="center", transform=ax.transAxes)
         return
-    ax.semilogx(interior_result.eps_grid, interior_result.mass_curve, color="#2166ac", linewidth=2)
+    mass = interior_result.mass_curve
+    plot_mass = np.maximum(mass, 1e-10) if yscale == "log" else mass
+    ax.plot(interior_result.eps_grid, plot_mass, color="#2166ac", linewidth=2)
+    ax.set_xscale("log")
+    if yscale == "log":
+        ax.set_yscale("log")
     ax.set_xlabel("epsilon (log scale)")
     ax.set_ylabel("P(z < epsilon)")
-    ax.set_title("Interior mass curve")
+    title = "Interior mass curve" + (" (log y)" if yscale == "log" else "")
+    ax.set_title(title)
     ax.grid(True, alpha=0.3)
     if interior_result.eps_star is not None:
         ax.axvline(
@@ -2606,18 +2640,24 @@ def plot_parameter_overview(
     tp_fn_status: str | None = None,
     tols: np.ndarray | None = None,
 ) -> Figure:
-    """Single-page 4x3 per-parameter overview.
+    """Single-page 5x3 per-parameter overview.
 
     Layout:
         Row 1: merged raw+sweep+filtered (spans cols 0-1) / interior z-hist
-        Row 2: lower boundary mass / upper boundary mass / interior mass
-        Row 3: ECDF lower / ECDF upper / quantile spacing
-        Row 4: lower boundary elbows / upper boundary elbows / interior elbows
+        Row 2: lower boundary mass (linear) / upper boundary mass (linear)
+               / interior mass (linear)
+        Row 3: lower boundary mass (log y) / upper boundary mass (log y)
+               / interior mass (log y)
+        Row 4: ECDF lower / ECDF upper / quantile spacing
+        Row 5: lower boundary elbows / upper boundary elbows
+               / interior elbows
 
-    Rows 2 and 4 mirror each other: left column = lower boundary, middle =
-    upper boundary, right = interior. This "lower/upper/interior" column
-    discipline lets the viewer scan vertically to compare related
-    visualizations for the same side of the distribution.
+    Rows 2, 3, and 5 mirror each other on a "lower / upper / interior"
+    column discipline. Rows 2 and 3 show the same mass data at linear
+    and log y-scales so the viewer can check both absolute magnitude
+    and small-tail structure (matching the standalone
+    *_boundary_diagnostics.png which also shows linear + log
+    magnitude).
 
     The top-left merged panel folds three visualizations (tolerance sweep
     in full color, pipeline-filtered as gray overlay, cut markers as
@@ -2646,9 +2686,9 @@ def plot_parameter_overview(
             0.01, 0.02, 0.03, 0.05]``.
 
     Returns:
-        Figure sized 16x22. Axes count = 11 grid panels (merged top spans
-        two cells = 1 axes) + 3 colorbars (merged top, lower mass, upper
-        mass) = 14.
+        Figure sized 16x28. Axes count = 14 grid panels (merged top spans
+        two cells = 1 axes) + 5 colorbars (merged top plus linear and
+        log versions of lower / upper mass) = 19.
     """
     if config is None:
         config = PlotConfig()
@@ -2682,8 +2722,8 @@ def plot_parameter_overview(
 
     cmap = plt.get_cmap(config.cmap)
 
-    fig = plt.figure(figsize=(16, 22), dpi=config.dpi)
-    gs = fig.add_gridspec(4, 3, hspace=0.5, wspace=0.35)
+    fig = plt.figure(figsize=(16, 28), dpi=config.dpi)
+    gs = fig.add_gridspec(5, 3, hspace=0.55, wspace=0.35)
 
     # Row 1: merged top panel spans cols 0-1; interior z-hist in col 2.
     ax_r1c01 = fig.add_subplot(gs[0, 0:2])
@@ -2717,52 +2757,65 @@ def plot_parameter_overview(
             fontsize=11,
         )
 
-    # Row 2: mass curves - lower boundary, upper boundary, interior.
+    def _interior_mass_or_placeholder(ax, yscale):
+        if interior_result is not None:
+            _overview_interior_mass(ax, interior_result, yscale=yscale)
+        else:
+            ax.axis("off")
+            ax.text(
+                0.5,
+                0.5,
+                "No interior result",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+                fontsize=11,
+            )
+
+    # Row 2: mass curves (linear y) - lower boundary, upper boundary, interior.
     ax_r2c1 = fig.add_subplot(gs[1, 0])
-    _overview_boundary_mass_side(ax_r2c1, boundary_result, "lower", config)
+    _overview_boundary_mass_side(ax_r2c1, boundary_result, "lower", config, yscale="linear")
 
     ax_r2c2 = fig.add_subplot(gs[1, 1])
-    _overview_boundary_mass_side(ax_r2c2, boundary_result, "upper", config)
+    _overview_boundary_mass_side(ax_r2c2, boundary_result, "upper", config, yscale="linear")
 
     ax_r2c3 = fig.add_subplot(gs[1, 2])
-    if interior_result is not None:
-        _overview_interior_mass(ax_r2c3, interior_result)
-    else:
-        ax_r2c3.axis("off")
-        ax_r2c3.text(
-            0.5,
-            0.5,
-            "No interior result",
-            ha="center",
-            va="center",
-            transform=ax_r2c3.transAxes,
-            fontsize=11,
-        )
+    _interior_mass_or_placeholder(ax_r2c3, "linear")
 
-    # Row 3: ECDF lower, ECDF upper, quantile spacing.
+    # Row 3: mass curves (log y) - same columns as row 2.
     ax_r3c1 = fig.add_subplot(gs[2, 0])
+    _overview_boundary_mass_side(ax_r3c1, boundary_result, "lower", config, yscale="log")
+
     ax_r3c2 = fig.add_subplot(gs[2, 1])
-    if U > L:
-        u_values = (x_clean - L) / (U - L)
-        _overview_ecdf_side(ax_r3c1, u_values, "lower", tols, boundary_result.t_lo_star, cmap)
-        _overview_ecdf_side(ax_r3c2, u_values, "upper", tols, boundary_result.t_hi_star, cmap)
+    _overview_boundary_mass_side(ax_r3c2, boundary_result, "upper", config, yscale="log")
 
     ax_r3c3 = fig.add_subplot(gs[2, 2])
-    if n_total > 0:
-        x_sorted = np.sort(x_clean)
-        _overview_spacing(ax_r3c3, x_sorted, L, U, tols, cmap)
-    else:
-        ax_r3c3.axis("off")
+    _interior_mass_or_placeholder(ax_r3c3, "log")
 
-    # Row 4: elbows - lower boundary, upper boundary, interior.
+    # Row 4: ECDF lower, ECDF upper, quantile spacing.
     ax_r4c1 = fig.add_subplot(gs[3, 0])
-    _overview_boundary_elbow_side(ax_r4c1, boundary_result, "lower")
-
     ax_r4c2 = fig.add_subplot(gs[3, 1])
-    _overview_boundary_elbow_side(ax_r4c2, boundary_result, "upper")
+    if U > L:
+        u_values = (x_clean - L) / (U - L)
+        _overview_ecdf_side(ax_r4c1, u_values, "lower", tols, boundary_result.t_lo_star, cmap)
+        _overview_ecdf_side(ax_r4c2, u_values, "upper", tols, boundary_result.t_hi_star, cmap)
 
     ax_r4c3 = fig.add_subplot(gs[3, 2])
-    _overview_interior_elbows_panel(ax_r4c3, interior_result)
+    if n_total > 0:
+        x_sorted = np.sort(x_clean)
+        _overview_spacing(ax_r4c3, x_sorted, L, U, tols, cmap)
+    else:
+        ax_r4c3.axis("off")
+
+    # Row 5: elbows - lower boundary, upper boundary, interior.
+    ax_r5c1 = fig.add_subplot(gs[4, 0])
+    _overview_boundary_elbow_side(ax_r5c1, boundary_result, "lower")
+
+    ax_r5c2 = fig.add_subplot(gs[4, 1])
+    _overview_boundary_elbow_side(ax_r5c2, boundary_result, "upper")
+
+    ax_r5c3 = fig.add_subplot(gs[4, 2])
+    _overview_interior_elbows_panel(ax_r5c3, interior_result)
 
     x0_str = f"{x0:.3g}" if x0 is not None else "None"
     title_parts = [f"{param_name}", f"L={L:.3g}", f"U={U:.3g}", f"x0={x0_str}"]

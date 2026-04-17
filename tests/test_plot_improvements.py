@@ -192,14 +192,15 @@ def test_histogram_tolerance_overlays_combined_accepts_external_ax():
 
 
 def test_parameter_overview_smoke():
-    """V2: 4x3 overview renders for all interior_result paths.
+    """X3: 5x3 overview renders for all interior_result paths.
 
-    Axes count after the V2 reshuffle:
-    - 11 grid panels: merged top spans 2 cells (1 axes), interior z-hist
-      (1), 3 mass-curve cells, 3 ECDF/spacing cells, 3 elbow cells.
-    - 3 colorbars: merged top panel, lower boundary mass, upper boundary
-      mass.
-    Total: 14 axes. Stable across all interior_result paths since
+    Axes count after the X3 reshuffle:
+    - 14 grid panels: merged top spans 2 cells (1 axes), interior z-hist
+      (1), 3 linear-mass cells, 3 log-mass cells, 3 ECDF/spacing cells,
+      3 elbow cells.
+    - 5 colorbars: merged top panel, linear lower mass, linear upper mass,
+      log lower mass, log upper mass.
+    Total: 19 axes. Stable across all interior_result paths since
     placeholder text still occupies the cell.
     """
     rng = np.random.default_rng(3)
@@ -221,8 +222,8 @@ def test_parameter_overview_smoke():
         config=PlotConfig(),
         tp_fn_status="lower: TP | upper: TP",
     )
-    assert len(fig_mock_interior.axes) == 14
-    assert tuple(fig_mock_interior.get_size_inches()) == (16.0, 22.0)
+    assert len(fig_mock_interior.axes) == 19
+    assert tuple(fig_mock_interior.get_size_inches()) == (16.0, 28.0)
     plt.close(fig_mock_interior)
 
     fig_none = plot_parameter_overview(
@@ -235,7 +236,7 @@ def test_parameter_overview_smoke():
         boundary_result=br,
         config=PlotConfig(),
     )
-    assert len(fig_none.axes) == 14
+    assert len(fig_none.axes) == 19
     plt.close(fig_none)
 
     # Interior with quantile_elbows populated - same count.
@@ -264,5 +265,5 @@ def test_parameter_overview_smoke():
         boundary_result=br_with_elbows,
         config=PlotConfig(),
     )
-    assert len(fig_full.axes) == 14
+    assert len(fig_full.axes) == 19
     plt.close(fig_full)
