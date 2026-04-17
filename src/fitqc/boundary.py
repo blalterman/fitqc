@@ -504,9 +504,12 @@ def _check_excess_mass(
                 # For delta function, mass should be nearly constant up to pileup width
                 # Check if mass >> uniform expectation at this tolerance
                 if mass_check > t_check * excess_ratio:
-                    # Valid pileup detected
-                    # Return the measurement tolerance (not the elbow value)
-                    return True, float(t_check)
+                    # Valid pileup detected.
+                    # Return t_star when it is at or above the measurement grid
+                    # point (genuine tight-but-non-zero elbow); else return
+                    # t_check as a defensible floor (true delta-at-boundary).
+                    reported_tol = float(t_star) if t_star >= t_check else float(t_check)
+                    return True, reported_tol
         # No measurable pileup found - elbow is small but no excess mass
         return False, None
 
