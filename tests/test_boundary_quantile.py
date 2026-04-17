@@ -359,11 +359,14 @@ class TestQuantileCurveComputation:
             f"Beyond pileup, ratios should increase from pileup values, got {uniform_ratios}"
         )
 
-        # Elbow detection should find elbow in the pileup region
-        elbow_q = elbows[0]
-        assert elbow_q is not None, "Should detect elbow for pileup data"
-        assert 0.01 <= elbow_q <= 0.10, (
-            f"Elbow should be in pileup region (q <= 0.10), got {elbow_q:.3f}"
+        # Elbow detection should find elbow near the pileup width.
+        # elbows[0] is a tolerance (not a quantile) — see
+        # _compute_quantile_curves_boundary return contract in boundary.py.
+        # Pileup width is 0.002, so expect elbow_tol ~ 0.002.
+        elbow_tol = elbows[0]
+        assert elbow_tol is not None, "Should detect elbow for pileup data"
+        assert 0.0005 <= elbow_tol <= 0.005, (
+            f"Elbow tolerance should be near pileup width 0.002, got {elbow_tol:.4f}"
         )
 
     def test_quantile_curve_shape_dtype_bounds(self):
