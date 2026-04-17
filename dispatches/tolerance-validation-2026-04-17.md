@@ -49,9 +49,9 @@ under the `all-on` config. Dispatch:
 | 16 | vz       | upper | 0.000000  | —                    | —         | —         | —       | NO HINT  | Interior-only note; former FN; fallback tol≈1e-7 per FN diag row #5 |
 | 17 | w_const  | lower | 0.250000  | —                    | —         | —         | —       | NO HINT  | CSV note empty; pre-B TP. Note: t_star=0.25 is a very aggressive cut (25% of range); `project_override_review.md` previously flagged M2 producing 78% lower-cut — follow-up visual review warranted |
 | 18 | w_const  | upper | 0.000100  | —                    | —         | —         | —       | NO HINT  | CSV note empty; pre-B TP |
-| 19 | e_w_p1   | lower | 0.001450  | —                    | —         | —         | —       | NO HINT  | CSV note interior-only ("|x|<1e-2 interior spike guess"); pre-B TP |
+| 19 | e_w_p1   | lower | 0.001450  | —                    | —         | —         | —       | NO HINT  | CSV note interior-only (interior spike at x0=0, eps_star=1.33e-9 per 2026-04-17 interior.py); pre-B TP |
 | 20 | e_w_p1   | upper | 0.000000  | —                    | —         | —         | —       | NO HINT  | Interior-only note; former FN; fallback tol≈1e-3 per FN diag row #6 |
-| 21 | e_w_p2   | lower | 0.001000  | —                    | —         | —         | —       | NO HINT  | CSV note interior-only ("|x|<2e-1 interior spike guess"); pre-B TP |
+| 21 | e_w_p2   | lower | 0.001000  | —                    | —         | —         | —       | NO HINT  | CSV note interior-only (interior spike at x0=0, eps_star=1.10e-8 per 2026-04-17 interior.py); pre-B TP |
 | 22 | e_w_p2   | upper | 0.000000  | —                    | —         | —         | —       | NO HINT  | Interior-only note; former FN; fallback tol≈1e-7 per FN diag row #10 (35% delta at u=1) |
 | 23 | e_w_a    | lower | 0.000100  | —                    | —         | —         | —       | NO HINT  | CSV note interior-only ("two interior spikes"); pre-B TP |
 | 24 | e_w_a    | upper | 0.096600  | —                    | —         | —         | —       | NO HINT  | Interior-only note; pre-B TP. Note: t_star=0.0966 is ~10% of range — aggressive cut; follow-up visual review warranted |
@@ -61,12 +61,12 @@ under the `all-on` config. Dispatch:
 The CSV `note` column mixes boundary observations with interior stickiness
 descriptions. Interior stickiness is being handled in a separate chat; this
 task addresses boundary pileup only. Therefore any CSV note describing
-interior behavior (`|x|<1e-2` noise for `e_dv_ap`/`e_dv_pp`, `|x|<1e-1` /
-`|x|<1e-2` / `|x|<2e-1` interior-spike guesses for `vz`/`e_w_p1`/`e_w_p2`,
-and the explicit "interior spike" / "interior stickiness" wording for
-`vy` / `vz` / `e_w_a`) is **not** reused as a boundary scale hint here.
-Rows whose boundary hint would otherwise have come only from such notes
-are classified NO HINT.
+interior behavior (`|x|<1e-2` noise for `e_dv_ap`/`e_dv_pp`, the `|x|<1e-1`
+interior-spike guess for `vz`, the now-confirmed interior spike descriptions
+for `e_w_p1`/`e_w_p2` (sharpened in commits `a890205`/`ac89109`), and the
+explicit "interior spike" / "interior stickiness" wording for `vy`/`e_w_a`)
+is **not** reused as a boundary scale hint here. Rows whose boundary hint
+would otherwise have come only from such notes are classified NO HINT.
 
 Under this scoping rule, only two CSV notes carry boundary-relevant scale
 information: `A_He` lower ("stickiness region extends to ~1e-1", explicitly
