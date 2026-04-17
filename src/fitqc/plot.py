@@ -21,7 +21,7 @@ from matplotlib.figure import Figure
 
 from fitqc.boundary import BoundaryResult
 from fitqc.config import PlotConfig
-from fitqc.interior import InteriorResult
+from fitqc.interior import InteriorResult, compute_z
 
 # Use non-interactive backend to avoid display issues
 matplotlib.use("Agg")
@@ -665,6 +665,10 @@ def plot_histogram_tolerance_overlays(
     bins: int = 100,
     use_alpha: bool = True,
     config: PlotConfig | None = None,
+    x0: float | None = None,
+    eps_star: float | None = None,
+    t_lo_star: float | None = None,
+    t_hi_star: float | None = None,
 ) -> Figure:
     """Plot histogram overlays showing effect of boundary tolerance cuts.
 
@@ -676,6 +680,14 @@ def plot_histogram_tolerance_overlays(
     Higher tolerances (stricter cuts) have higher zorder (drawn on top).
     By default, uses varying alpha: low tolerance = opaque (alpha=1.0), high tolerance = transparent (alpha=0.3).
 
+    When ``x0`` and ``eps_star`` are both supplied, samples within the
+    interior stickiness cut (``|x - x0| < eps_star * max(x0 - L, U - x0)``)
+    are additionally removed from every tolerance layer. This matches the
+    ``_build_mask`` semantics in ``fitqc.report``.
+
+    When ``t_lo_star`` or ``t_hi_star`` is supplied, a vertical red marker
+    is drawn at the corresponding detected cut position.
+
     Args:
         x: Array of parameter values.
         L: Lower bound.
@@ -685,6 +697,10 @@ def plot_histogram_tolerance_overlays(
         bins: Number of histogram bins.
         use_alpha: If True, use alpha gradient (base=1.0, top=0.3). If False, all layers use alpha=1.0 (fully opaque).
         config: PlotConfig for styling. Uses defaults if None.
+        x0: Optional interior stickiness center. Used with eps_star.
+        eps_star: Optional interior stickiness radius (normalized). Used with x0.
+        t_lo_star: Optional lower-boundary detected cut; drawn as a vertical marker.
+        t_hi_star: Optional upper-boundary detected cut; drawn as a vertical marker.
 
     Returns:
         Figure with two subplots (lower cuts, upper cuts) and colorbar.
@@ -702,6 +718,10 @@ def plot_histogram_tolerance_overlays(
 
     # Filter non-finite values
     x = x[np.isfinite(x)]
+
+    if x0 is not None and eps_star is not None and len(x) > 0:
+        z = compute_z(x, x0, L, U)
+        x = x[z >= eps_star]
 
     # Create figure with two subplots
     fig, axes = plt.subplots(1, 2, figsize=config.figsize_tolerance, dpi=config.dpi)
@@ -748,6 +768,15 @@ def plot_histogram_tolerance_overlays(
     ax_lower.grid(True, alpha=0.3)
     ax_lower.set_yscale("log")
 
+    if t_lo_star is not None:
+        ax_lower.axvline(
+            L + t_lo_star * (U - L),
+            color="red",
+            lw=2,
+            label=f"t_lo* = {t_lo_star:.4f}",
+        )
+        ax_lower.legend(loc="upper right")
+
     # Right subplot: upper cuts
     ax_upper = axes[1]
     for i, tol in enumerate(tols):
@@ -773,6 +802,15 @@ def plot_histogram_tolerance_overlays(
     ax_upper.set_title("Upper cuts: x < U - tol*(U-L)")
     ax_upper.grid(True, alpha=0.3)
     ax_upper.set_yscale("log")
+
+    if t_hi_star is not None:
+        ax_upper.axvline(
+            U - t_hi_star * (U - L),
+            color="red",
+            lw=2,
+            label=f"t_hi* = {t_hi_star:.4f}",
+        )
+        ax_upper.legend(loc="upper left")
 
     # Apply tight_layout before adding colorbar
     fig.tight_layout()
