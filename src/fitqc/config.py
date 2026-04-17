@@ -233,6 +233,14 @@ class BoundaryConfig:
     # Iterative refinement (Fix 5)
     refine_transition: bool = False  # Enable iterative Kneedle refinement
 
+    # Sub-grid excess-mass fallback tolerances. Tried in ascending order when
+    # the primary Kneedle + check_excess_mass path returns no detection. The
+    # smallest tol whose mass exceeds tol * excess_ratio is reported as t_star,
+    # so downstream filters apply the tightest cut consistent with the data.
+    subgrid_fallback_tols: tuple[float, ...] = field(
+        default_factory=lambda: (1e-7, 1e-6, 1e-5, 3e-5, 1e-4, 3e-4)
+    )
+
     def __post_init__(self) -> None:
         """Validate configuration parameters."""
         # Validate pileup_threshold

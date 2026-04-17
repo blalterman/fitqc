@@ -526,6 +526,47 @@ def _check_excess_mass(
     return has_pileup, float(t_star) if has_pileup else None
 
 
+def _check_excess_mass_subgrid(
+    u_sorted: np.ndarray,
+    subgrid_tols: tuple[float, ...] | np.ndarray,
+    excess_ratio: float,
+) -> tuple[bool, float | None]:
+    """Sub-grid excess-mass scan for delta-function pileups at the boundary.
+
+    Called only when the primary Kneedle + check_excess_mass path returns
+    (False, None). Detects pileups narrower than the standard quantile
+    grid floor (default 0.0005), where the Kneedle either misses the
+    elbow entirely or latches on a wide false elbow that fails the
+    excess-mass check.
+
+    Detection requires both:
+
+    1. Delta-function gate: at least one sample lies at u = 0 to within
+       machine precision. Real boundary stickiness comes from optimizer
+       output stuck exactly at the bound; statistical fluctuations in
+       random data have samples near but not at the boundary.
+    2. Excess mass at some sub-grid tolerance: mass > tol * excess_ratio.
+
+    The gate prevents false positives on uniform data, where 1-2 chance
+    samples within a fine tolerance can satisfy criterion 2 alone.
+
+    Returns the smallest tolerance where excess holds. Conservative: t_star
+    is the tightest cut that detects the pileup, so downstream filtering
+    removes only samples within the immediate pileup.
+    """
+    # Delta-function gate: any sample within ~float64 precision of u=0?
+    if len(u_sorted) == 0 or tail_mass(u_sorted, 1e-12) == 0.0:
+        return False, None
+
+    for tol in sorted(float(t) for t in subgrid_tols):
+        if tol <= 0:
+            continue
+        mass = tail_mass(u_sorted, tol)
+        if mass > tol * excess_ratio:
+            return True, float(tol)
+    return False, None
+
+
 def run_boundary_qc(
     x: np.ndarray,
     L: float,
@@ -823,6 +864,26 @@ def run_boundary_qc(
     upper_pileup_detected, t_hi_star = _check_excess_mass(
         t_hi_raw, upper_mass_curve, tol_grid, pileup_threshold, excess_ratio
     )
+
+    # Sub-grid excess-mass fallback: when the Kneedle + check_excess_mass path
+    # finds nothing, a narrow boundary pileup may still exist below the
+    # quantile_grid floor. Scan finer tolerances directly. The fallback only
+    # runs when the primary detection failed, so it can never regress a true
+    # positive — it can only flip a missed pileup to detected.
+    if not lower_pileup_detected:
+        sub_det, sub_t = _check_excess_mass_subgrid(
+            u_sorted, config.subgrid_fallback_tols, excess_ratio
+        )
+        if sub_det:
+            lower_pileup_detected = True
+            t_lo_star = sub_t
+    if not upper_pileup_detected:
+        sub_det, sub_t = _check_excess_mass_subgrid(
+            one_minus_u_sorted, config.subgrid_fallback_tols, excess_ratio
+        )
+        if sub_det:
+            upper_pileup_detected = True
+            t_hi_star = sub_t
 
     # Mechanism 2 — delta-function propagation (refine_transition only):
     # For delta-function pileups (t_raw ≈ 0), check_excess_mass returns a very

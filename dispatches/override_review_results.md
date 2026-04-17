@@ -6,9 +6,9 @@ All configs use `refine_transition=True, use_quantile_analysis=True, grid_mode='
 ## Summary
 
 ### M3
-- Helps: 1 / 24
+- Helps: 0 / 24
 - Hurts: 0 / 24
-- No effect: 23 / 24
+- No effect: 24 / 24
 - Both wrong: 0 / 24
 - Interaction: 0 / 24
 
@@ -27,16 +27,11 @@ No interactions detected — all override effects are consistent across contexts
 
 | Override | Parameter | Side | Verdict |
 |----------|-----------|------|---------|
-| M3 | w_const | lower | helps |
 ## Marginal Effect Details
 
 Shows detection and threshold changes when toggling each override.
 
 ### M3
-
-**w_const (lower)** — expected: True
-  all-on -> M3-off: det True->False, raw 0.250000->0.050983, star 0.250000->None [helps]
-  M2-off -> all-off: det True->False, raw 0.250000->0.050983, star 0.250000->None [helps]
 
 ### M2
 
@@ -48,46 +43,46 @@ Shows detection and threshold changes when toggling each override.
 | A_He | M3-off | 0.000000 | 0.016420 | 0.000000 | 0.000100 | T | T |
 | A_He | M2-off | 0.000000 | 0.000100 | 0.000000 | 0.000100 | T | T |
 | A_He | all-off | 0.000000 | 0.000100 | 0.000000 | 0.000100 | T | T |
-| e_dv_ap | all-on | 0.006071 | None | 0.000000 | 0.011580 | F | T |
-| e_dv_ap | M3-off | 0.006071 | None | 0.000000 | 0.011580 | F | T |
-| e_dv_ap | M2-off | 0.006071 | None | 0.000000 | 0.000100 | F | T |
-| e_dv_ap | all-off | 0.006071 | None | 0.000000 | 0.000100 | F | T |
+| e_dv_ap | all-on | 0.006071 | 0.000000 | 0.000000 | 0.011580 | T | T |
+| e_dv_ap | M3-off | 0.006071 | 0.000000 | 0.000000 | 0.011580 | T | T |
+| e_dv_ap | M2-off | 0.006071 | 0.000000 | 0.000000 | 0.000100 | T | T |
+| e_dv_ap | all-off | 0.006071 | 0.000000 | 0.000000 | 0.000100 | T | T |
 | e_dv_pp | all-on | 0.000000 | 0.117810 | 0.000000 | 0.041320 | T | T |
 | e_dv_pp | M3-off | 0.000000 | 0.117810 | 0.000000 | 0.041320 | T | T |
 | e_dv_pp | M2-off | 0.000000 | 0.000100 | 0.000000 | 0.000100 | T | T |
 | e_dv_pp | all-off | 0.000000 | 0.000100 | 0.000000 | 0.000100 | T | T |
-| np1 | all-on | 0.001551 | 0.001551 | None | None | T | F |
-| np1 | M3-off | 0.001551 | 0.001551 | None | None | T | F |
-| np1 | M2-off | 0.001551 | 0.001551 | None | None | T | F |
-| np1 | all-off | 0.001551 | 0.001551 | None | None | T | F |
-| np2 | all-on | 0.000366 | 0.000366 | None | None | T | F |
-| np2 | M3-off | 0.000366 | 0.000366 | None | None | T | F |
-| np2 | M2-off | 0.000366 | 0.000366 | None | None | T | F |
-| np2 | all-off | 0.000366 | 0.000366 | None | None | T | F |
-| vx | all-on | None | None | 0.001590 | 0.001590 | F | T |
-| vx | M3-off | None | None | 0.001590 | 0.001590 | F | T |
-| vx | M2-off | None | None | 0.001590 | 0.001590 | F | T |
-| vx | all-off | None | None | 0.001590 | 0.001590 | F | T |
-| vy | all-on | 0.250000 | None | 0.147250 | None | F | F |
-| vy | M3-off | 0.250000 | None | 0.147250 | None | F | F |
-| vy | M2-off | 0.250000 | None | 0.147250 | None | F | F |
-| vy | all-off | 0.250000 | None | 0.147250 | None | F | F |
-| vz | all-on | 0.159531 | None | 0.171768 | None | F | F |
-| vz | M3-off | 0.159531 | None | 0.171768 | None | F | F |
-| vz | M2-off | 0.159531 | None | 0.171768 | None | F | F |
-| vz | all-off | 0.159531 | None | 0.171768 | None | F | F |
+| np1 | all-on | 0.001551 | 0.001551 | None | 0.000000 | T | T |
+| np1 | M3-off | 0.001551 | 0.001551 | None | 0.000000 | T | T |
+| np1 | M2-off | 0.001551 | 0.001551 | None | 0.000000 | T | T |
+| np1 | all-off | 0.001551 | 0.001551 | None | 0.000000 | T | T |
+| np2 | all-on | 0.000366 | 0.000366 | None | 0.000000 | T | T |
+| np2 | M3-off | 0.000366 | 0.000366 | None | 0.000000 | T | T |
+| np2 | M2-off | 0.000366 | 0.000366 | None | 0.000000 | T | T |
+| np2 | all-off | 0.000366 | 0.000366 | None | 0.000000 | T | T |
+| vx | all-on | None | 0.000000 | 0.001590 | 0.001590 | T | T |
+| vx | M3-off | None | 0.000000 | 0.001590 | 0.001590 | T | T |
+| vx | M2-off | None | 0.000000 | 0.001590 | 0.001590 | T | T |
+| vx | all-off | None | 0.000000 | 0.001590 | 0.001590 | T | T |
+| vy | all-on | 0.250000 | 0.000000 | 0.147250 | 0.000000 | T | T |
+| vy | M3-off | 0.250000 | 0.000000 | 0.147250 | 0.000000 | T | T |
+| vy | M2-off | 0.250000 | 0.000000 | 0.147250 | 0.000000 | T | T |
+| vy | all-off | 0.250000 | 0.000000 | 0.147250 | 0.000000 | T | T |
+| vz | all-on | 0.159531 | 0.000000 | 0.171768 | 0.000000 | T | T |
+| vz | M3-off | 0.159531 | 0.000000 | 0.171768 | 0.000000 | T | T |
+| vz | M2-off | 0.159531 | 0.000000 | 0.171768 | 0.000000 | T | T |
+| vz | all-off | 0.159531 | 0.000000 | 0.171768 | 0.000000 | T | T |
 | w_const | all-on | 0.250000 | 0.250000 | 0.000000 | 0.000100 | T | T |
-| w_const | M3-off | 0.050983 | None | 0.000000 | 0.000100 | F | T |
+| w_const | M3-off | 0.050983 | 0.000000 | 0.000000 | 0.000100 | T | T |
 | w_const | M2-off | 0.250000 | 0.250000 | 0.000000 | 0.000100 | T | T |
-| w_const | all-off | 0.050983 | None | 0.000000 | 0.000100 | F | T |
-| e_w_p1 | all-on | 0.001450 | 0.001450 | 0.009063 | None | T | F |
-| e_w_p1 | M3-off | 0.001450 | 0.001450 | 0.009063 | None | T | F |
-| e_w_p1 | M2-off | 0.001450 | 0.001450 | 0.009063 | None | T | F |
-| e_w_p1 | all-off | 0.001450 | 0.001450 | 0.009063 | None | T | F |
-| e_w_p2 | all-on | 0.001000 | 0.001000 | None | None | T | F |
-| e_w_p2 | M3-off | 0.001000 | 0.001000 | None | None | T | F |
-| e_w_p2 | M2-off | 0.001000 | 0.001000 | None | None | T | F |
-| e_w_p2 | all-off | 0.001000 | 0.001000 | None | None | T | F |
+| w_const | all-off | 0.050983 | 0.000000 | 0.000000 | 0.000100 | T | T |
+| e_w_p1 | all-on | 0.001450 | 0.001450 | 0.009063 | 0.000000 | T | T |
+| e_w_p1 | M3-off | 0.001450 | 0.001450 | 0.009063 | 0.000000 | T | T |
+| e_w_p1 | M2-off | 0.001450 | 0.001450 | 0.009063 | 0.000000 | T | T |
+| e_w_p1 | all-off | 0.001450 | 0.001450 | 0.009063 | 0.000000 | T | T |
+| e_w_p2 | all-on | 0.001000 | 0.001000 | None | 0.000000 | T | T |
+| e_w_p2 | M3-off | 0.001000 | 0.001000 | None | 0.000000 | T | T |
+| e_w_p2 | M2-off | 0.001000 | 0.001000 | None | 0.000000 | T | T |
+| e_w_p2 | all-off | 0.001000 | 0.001000 | None | 0.000000 | T | T |
 | e_w_a | all-on | 0.000000 | 0.000100 | 0.000000 | 0.096600 | T | T |
 | e_w_a | M3-off | 0.000000 | 0.000100 | 0.000000 | 0.096600 | T | T |
 | e_w_a | M2-off | 0.000000 | 0.000100 | 0.000000 | 0.000100 | T | T |
