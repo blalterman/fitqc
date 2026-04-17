@@ -216,7 +216,9 @@ def plot_boundary_diagnostics(result: BoundaryResult, config: PlotConfig) -> Fig
         if in_range.any():
             mass_in = result.lower_mass_curve[in_range]
             uniform_in = result.tol_grid[in_range]
-            y_max_lo = 1.2 * max(float(mass_in.max()), 1.5 * float(uniform_in.max()))
+            y_max_lo = 1.2 * max(float(mass_in.max()), 0.5 * float(uniform_in.max()))
+            if y_max_lo <= 0:
+                y_max_lo = 0.01
             ax1.set_xlim(0, x_max_lo)
             ax1.set_ylim(0, y_max_lo)
 
@@ -272,7 +274,9 @@ def plot_boundary_diagnostics(result: BoundaryResult, config: PlotConfig) -> Fig
         if in_range.any():
             mass_in = result.upper_mass_curve[in_range]
             uniform_in = result.tol_grid[in_range]
-            y_max_hi = 1.2 * max(float(mass_in.max()), 1.5 * float(uniform_in.max()))
+            y_max_hi = 1.2 * max(float(mass_in.max()), 0.5 * float(uniform_in.max()))
+            if y_max_hi <= 0:
+                y_max_hi = 0.01
             ax2.set_xlim(0, x_max_hi)
             ax2.set_ylim(0, y_max_hi)
 
@@ -2224,8 +2228,15 @@ def _overview_boundary_mass_side(
         in_range = tol_grid <= x_max
         if in_range.any():
             mass_in = mass_curve[in_range]
-            uniform_in = tol_grid[in_range]
-            y_max = 1.2 * max(float(mass_in.max()), 1.5 * float(uniform_in.max()))
+            mass_max = float(mass_in.max())
+            # Zoom to the data - pad by 20% above mass_max. When the mass
+            # curve is nearly flat at zero (e.g. no detected pileup) fall
+            # back to a small positive ceiling so the uniform reference
+            # (y = tol, reaching x_max) stays visible.
+            uniform_max = float(tol_grid[in_range].max())
+            y_max = 1.2 * max(mass_max, 0.5 * uniform_max)
+            if y_max <= 0:
+                y_max = 0.01
             ax.set_xlim(0, x_max)
             ax.set_ylim(0, y_max)
 
