@@ -60,6 +60,7 @@ def plot_interior_diagnostics(result: InteriorResult, config: PlotConfig) -> Fig
     ax1.set_xlabel("z (normalized distance from x0)")
     ax1.set_ylabel("Count")
     ax1.set_title("Distribution of z-values")
+    ax1.set_yscale("symlog", linthresh=1)
 
     # Mark spike location if detected
     if result.spike_detected and result.spike_z_loc is not None:
