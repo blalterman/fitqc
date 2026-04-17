@@ -1,6 +1,6 @@
 {
   "name": "vy",
-  "x0": null,
+  "x0": 0.0,
   "L": -200.0,
   "U": 200.0,
   "units": "km/s",
@@ -10,12 +10,12 @@
   "sample_method": "uniform random without replacement",
   "source": "/Users/balterma/observatories/wind/pipeline/swe/swefc.h5:ppa12_apeq",
   "fitqc_test": {
-    "x0": null,
+    "x0": 0.0,
     "L": -200.0,
     "U": 200.0,
     "expected_lower_stickiness": true,
     "expected_upper_stickiness": true,
     "expected_interior_stickiness": true
   },
-  "notes": "Moment-based x0. Small shoulders observed around 0 in tolerance histograms - may be initial guesses or moment analysis artifacts. Testing if our methods can detect these subtle spikes. May require interior detection methods beyond tolerance histograms."
+  "notes": "Moment-based x0. Small shoulders observed around 0 in tolerance histograms. Interior sticky point at vy=0 confirmed on closer visual inspection of overview plots (2026-04-17)."
 }

@@ -5,7 +5,7 @@ e_dv_pp,-75,75,0,-75,75,0,log x and log |x| both look like noise for |x| < 1e-2
 np1,0.01,100,,0.01,100,None,
 np2,0.01,100,0,0.01,100,None,No interior stickiness visible in np2/np1 or np2/(np1+np2) ratio plots.
 vx,-1200,-200,,-1200,-200,None,"Upper stickiness extends ~5-12 km/s inward from U=-200 (visible rise above background around -205 to -212). Sharp spike at U=-200."
-vy,-200,200,,-200,200,0,My guess is the |x| < 1e-1 is where the interior spike may be
+vy,-200,200,0,-200,200,1,Interior spike at vy=0 confirmed on closer inspection of overview histogram.
 vz,-200,200,,-200,200,0,My guess is the |x| < 1e-1 is where the interior spike may be
 w_const,5,150,,5,150,None,
 e_w_p1,-75,75,0,-75,75,0,My guess is the |x| < 1e-2 is where the interior spike may be
