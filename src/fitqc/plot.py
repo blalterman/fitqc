@@ -2498,100 +2498,103 @@ def _draw_elbow_family(
     return True
 
 
-def _overview_combined_elbows(
-    ax_boundary,
+def _overview_boundary_elbows_panel(
+    ax,
     boundary_result: BoundaryResult,
-    interior_result: InteriorResult | None,
 ) -> None:
-    """Combined quantile-elbow panel: boundary on main axis, interior on twinx.
+    """Combined boundary elbow panel: lower + upper on one axes.
 
-    Boundary (lower in blue, upper in red) is on the main axis with a
-    linear y-axis in tolerance units. Interior (green) is on a twinx
-    right-side axis with a log y-axis in epsilon units. Each family
-    carries its per-quantile scatter, Kneedle elbow diamond marker, and
-    t_raw / t_star horizontal thresholds — the same information shown in
-    the standalone ``*_boundary_elbows.png`` and ``*_interior_elbows.png``
-    figures.
+    Both sides share the same tolerance y-axis (no twinx needed) and are
+    distinguished by marker + color: lower = blue circles, upper = red
+    crosses. Each side carries its per-quantile scatter, Kneedle
+    diamond, and t_raw / t_star axhlines — matching the two-panel
+    *_boundary_elbows.png standalone.
     """
     boundary_elbows = boundary_result.quantile_elbows or {}
     lower_elbows = boundary_elbows.get("lower", {}) if isinstance(boundary_elbows, dict) else {}
     upper_elbows = boundary_elbows.get("upper", {}) if isinstance(boundary_elbows, dict) else {}
 
-    lower_color = "#1f77b4"
-    upper_color = "#d62728"
-    interior_color = "#2ca02c"
-
     lower_drawn = _draw_elbow_family(
-        ax_boundary,
+        ax,
         lower_elbows,
         boundary_result.t_lo_star,
         boundary_result.t_lo_raw,
-        lower_color,
+        "#1f77b4",
         "o",
         "lower",
     )
     upper_drawn = _draw_elbow_family(
-        ax_boundary,
+        ax,
         upper_elbows,
         boundary_result.t_hi_star,
         boundary_result.t_hi_raw,
-        upper_color,
+        "#d62728",
         "x",
         "upper",
     )
 
-    ax_boundary.set_xlabel("Quantile")
-    ax_boundary.set_ylabel("Boundary tolerance", color=lower_color)
-    ax_boundary.tick_params(axis="y", labelcolor=lower_color)
-    ax_boundary.set_title("Quantile elbows (boundary + interior)")
-    ax_boundary.grid(True, alpha=0.3)
+    ax.set_xlabel("Quantile")
+    ax.set_ylabel("Tolerance")
+    ax.set_title("Boundary quantile elbows (lower + upper)")
+    ax.grid(True, alpha=0.3)
 
-    interior_drawn = False
-    if (
-        interior_result is not None
-        and interior_result.quantile_elbows is not None
-        and interior_result.quantile_elbows
-    ):
-        ax_interior = ax_boundary.twinx()
-        interior_drawn = _draw_elbow_family(
-            ax_interior,
-            interior_result.quantile_elbows,
-            interior_result.eps_star,
-            # InteriorResult doesn't carry a separate t_raw - treat the per-
-            # quantile median (eps_star) as both the raw and validated value
-            # so the standalone interior-elbows PNG stays visually consistent.
-            None,
-            interior_color,
-            "s",
-            "interior",
-        )
-        ax_interior.set_yscale("log")
-        ax_interior.set_ylabel("Interior epsilon (log)", color=interior_color)
-        ax_interior.tick_params(axis="y", labelcolor=interior_color)
-
-        handles_b, labels_b = ax_boundary.get_legend_handles_labels()
-        handles_i, labels_i = ax_interior.get_legend_handles_labels()
-        ax_boundary.legend(
-            handles_b + handles_i,
-            labels_b + labels_i,
-            loc="best",
-            fontsize=6,
-            ncol=2,
-        )
-    elif lower_drawn or upper_drawn:
-        ax_boundary.legend(loc="best", fontsize=6, ncol=2)
-
-    if not (lower_drawn or upper_drawn or interior_drawn):
-        ax_boundary.axis("off")
-        ax_boundary.text(
+    if lower_drawn or upper_drawn:
+        ax.legend(loc="best", fontsize=6, ncol=2)
+    else:
+        ax.axis("off")
+        ax.text(
             0.5,
             0.5,
-            "No quantile elbows available",
+            "No boundary quantile elbows",
             ha="center",
             va="center",
-            transform=ax_boundary.transAxes,
+            transform=ax.transAxes,
             fontsize=10,
         )
+
+
+def _overview_interior_elbows_panel(
+    ax,
+    interior_result: InteriorResult | None,
+) -> None:
+    """Interior quantile elbow panel: single family on log y-axis."""
+    if (
+        interior_result is None
+        or interior_result.quantile_elbows is None
+        or not interior_result.quantile_elbows
+    ):
+        ax.axis("off")
+        ax.text(
+            0.5,
+            0.5,
+            "No interior quantile elbows",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+            fontsize=10,
+        )
+        return
+
+    drawn = _draw_elbow_family(
+        ax,
+        interior_result.quantile_elbows,
+        interior_result.eps_star,
+        # InteriorResult has no separate t_raw; the detector emits a
+        # single eps_star (median across quantiles) that serves as the
+        # validated threshold. No Kneedle-diamond or t_raw axhline is
+        # drawn for interior, matching the standalone interior plot.
+        None,
+        "#2ca02c",
+        "s",
+        "interior",
+    )
+    ax.set_yscale("log")
+    ax.set_xlabel("Quantile")
+    ax.set_ylabel("Epsilon (log)")
+    ax.set_title("Interior quantile elbows")
+    ax.grid(True, alpha=0.3)
+    if drawn:
+        ax.legend(loc="best", fontsize=7)
 
 
 def plot_parameter_overview(
@@ -2609,15 +2612,19 @@ def plot_parameter_overview(
     """Single-page 3x3 per-parameter overview.
 
     Layout:
-        Row 1: raw+filtered overplot / boundary mass twinx / interior z-hist
-        Row 2: combined hist tolerance overlay / ECDF lower / ECDF upper
-        Row 3: quantile spacing / combined elbows (boundary+interior twinx)
-               / interior mass curve
+        Row 1: merged raw+filtered+tolerance sweep / boundary mass twinx
+               (tolerance-colored, side by line style) / interior z-hist
+        Row 2: interior mass curve / ECDF lower / ECDF upper
+        Row 3: quantile spacing / boundary elbows (lower+upper)
+               / interior elbows
 
-    Each "combined" panel folds in the same information the standalone
-    per-parameter PNGs show, so the overview is a complete visual
-    verification surface without needing to cross-reference
-    ``figures/<param>/*.png``.
+    The top-left panel folds three visualizations (raw, tolerance sweep,
+    pipeline-filtered) into one info-dense cell with a colorbar. The
+    boundary mass panel colors each mass curve segment by tolerance and
+    shares a colorbar. Boundary and interior elbow panels match the
+    standalone ``*_boundary_elbows.png`` / ``*_interior_elbows.png``
+    figures (per-side quantile scatter, Kneedle diamond marker, t_raw and
+    t_star axhlines).
 
     Args:
         param_name: Display name (appears in title).
@@ -2640,9 +2647,11 @@ def plot_parameter_overview(
             0.01, 0.02, 0.03, 0.05]``.
 
     Returns:
-        Figure sized 15x15. Axes count = 9 panels + 1 boundary-mass twinx
-        + 1 combined-elbows twinx (when interior quantile data is present)
-        + 1 embedded combined-hist colorbar = 12.
+        Figure sized 15x15. Axes count = 9 grid panels + 1 boundary-mass
+        twinx + 1 boundary-mass colorbar + 1 merged top-left colorbar = 12.
+        (The separate boundary / interior elbow panels no longer use twinx,
+        so the count is stable regardless of whether interior quantile
+        elbows are populated.)
     """
     if config is None:
         config = PlotConfig()
@@ -2714,12 +2723,22 @@ def plot_parameter_overview(
             fontsize=11,
         )
 
-    # Row 2 - R2C1 is reserved for U5 (interior mass curve). Until U5 lands
-    # it is explicitly left blank so the layout geometry is stable.
+    # Row 2: interior mass curve, ECDF lower, ECDF upper.
     ax_r2c1 = fig.add_subplot(gs[1, 0])
-    ax_r2c1.axis("off")
+    if interior_result is not None:
+        _overview_interior_mass(ax_r2c1, interior_result)
+    else:
+        ax_r2c1.axis("off")
+        ax_r2c1.text(
+            0.5,
+            0.5,
+            "No interior result",
+            ha="center",
+            va="center",
+            transform=ax_r2c1.transAxes,
+            fontsize=11,
+        )
 
-    # ECDF lower and upper get full-size cells in row 2.
     ax_r2c2 = fig.add_subplot(gs[1, 1])
     ax_r2c3 = fig.add_subplot(gs[1, 2])
     if U > L:
@@ -2727,7 +2746,7 @@ def plot_parameter_overview(
         _overview_ecdf_side(ax_r2c2, u_values, "lower", tols, boundary_result.t_lo_star, cmap)
         _overview_ecdf_side(ax_r2c3, u_values, "upper", tols, boundary_result.t_hi_star, cmap)
 
-    # Row 3
+    # Row 3: quantile spacing, boundary elbows, interior elbows.
     ax_r3c1 = fig.add_subplot(gs[2, 0])
     if n_total > 0:
         x_sorted = np.sort(x_clean)
@@ -2736,22 +2755,10 @@ def plot_parameter_overview(
         ax_r3c1.axis("off")
 
     ax_r3c2 = fig.add_subplot(gs[2, 1])
-    _overview_combined_elbows(ax_r3c2, boundary_result, interior_result)
+    _overview_boundary_elbows_panel(ax_r3c2, boundary_result)
 
     ax_r3c3 = fig.add_subplot(gs[2, 2])
-    if interior_result is not None:
-        _overview_interior_mass(ax_r3c3, interior_result)
-    else:
-        ax_r3c3.axis("off")
-        ax_r3c3.text(
-            0.5,
-            0.5,
-            "No interior result",
-            ha="center",
-            va="center",
-            transform=ax_r3c3.transAxes,
-            fontsize=11,
-        )
+    _overview_interior_elbows_panel(ax_r3c3, interior_result)
 
     x0_str = f"{x0:.3g}" if x0 is not None else "None"
     title_parts = [f"{param_name}", f"L={L:.3g}", f"U={U:.3g}", f"x0={x0_str}"]

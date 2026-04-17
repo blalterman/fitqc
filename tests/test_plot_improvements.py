@@ -192,17 +192,18 @@ def test_histogram_tolerance_overlays_combined_accepts_external_ax():
 
 
 def test_parameter_overview_smoke():
-    """U3: 3x3 overview renders for both interior_result paths.
+    """U5: 3x3 overview renders for all interior_result paths.
 
-    Axes count after the U2/U3 changes:
+    Axes count is stable at 12 across all paths since the elbow panels
+    no longer use twinx (they are split into per-side cells):
     - 9 grid cells
     - boundary mass twinx (+1)
     - boundary mass tolerance colorbar (+1)
     - merged top-left panel colorbar (+1)
-    Plus when interior quantile elbows are populated:
-    - combined-elbows twinx (+1)
 
-    So: 12 axes without interior elbows, 13 with.
+    Placeholder text in the interior mass / interior elbow cells when
+    interior_result is None still occupies a single Axes, so the count
+    doesn't change between paths.
     """
     rng = np.random.default_rng(3)
     L, U = 0.0, 1.0
@@ -210,7 +211,7 @@ def test_parameter_overview_smoke():
     x = np.concatenate([rng.uniform(L, U, size=900), np.zeros(100)])
 
     br = _mock_boundary_result(t_lo_star=0.01, t_hi_star=0.01)
-    ir = _mock_interior_result()  # no quantile_elbows populated
+    ir = _mock_interior_result()
 
     fig_mock_interior = plot_parameter_overview(
         param_name="synthetic",
@@ -239,7 +240,7 @@ def test_parameter_overview_smoke():
     assert len(fig_none.axes) == 12
     plt.close(fig_none)
 
-    # Interior with quantile_elbows populated -> combined-elbows twinx adds one axes
+    # Interior with quantile_elbows populated - same count (no twinx).
     ir_with_elbows = InteriorResult(
         spike_detected=True,
         spike_z_loc=0.05,
@@ -265,5 +266,5 @@ def test_parameter_overview_smoke():
         boundary_result=br_with_elbows,
         config=PlotConfig(),
     )
-    assert len(fig_full.axes) == 13
+    assert len(fig_full.axes) == 12
     plt.close(fig_full)
