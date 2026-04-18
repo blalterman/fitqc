@@ -90,15 +90,13 @@ def process(name: str, pdf: PdfPages | None = None, ground_truth: dict | None = 
     U = meta["U"]
     x0 = meta.get("x0")
 
-    range_width = U - L
-    if range_width > 100:
-        bins = 500
-    elif range_width > 50:
-        bins = 300
-    elif range_width > 10:
-        bins = 200
-    else:
-        bins = 100
+    fd_edges = np.histogram_bin_edges(x, bins="fd")
+    doane_edges = np.histogram_bin_edges(x, bins="doane")
+    fd_width = fd_edges[1] - fd_edges[0] if len(fd_edges) > 1 else (U - L) / 100
+    doane_width = doane_edges[1] - doane_edges[0] if len(doane_edges) > 1 else (U - L) / 100
+    chosen_width = min(fd_width, doane_width)
+    # Floor 500 preserves pileup visibility on narrow features; ceiling 2000 bounds render cost.
+    bins = max(500, min(int(np.ceil((U - L) / chosen_width)), 2000))
 
     ds_out = OUT / name
     ds_out.mkdir(parents=True, exist_ok=True)
