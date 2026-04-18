@@ -714,14 +714,14 @@ def run_boundary_qc(
             (
                 t_lo_raw,
                 quantile_grid_refined_lower,
-                q_lo_elbow,
+                _q_lo_elbow,
                 tol_at_quantile_lower,
                 elbows_lower,
             ) = _refine_elbow_iteratively(u_sorted, tol_grid, quantile_grid_arr, max_iterations=5)
             (
                 t_hi_raw,
                 quantile_grid_refined_upper,
-                q_hi_elbow,
+                _q_hi_elbow,
                 tol_at_quantile_upper,
                 elbows_upper,
             ) = _refine_elbow_iteratively(
