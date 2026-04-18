@@ -1,6 +1,6 @@
 # swefc.h5 calibration report
 
-- Generated: 2026-04-18 05:22:51
+- Generated: 2026-04-18 05:36:24
 - Dataset: `swefc.h5` key `ppa12_apeq`
 - Ground truth: `dispatches/ground_truth_swefc.json`
 - Config: `BoundaryConfig(use_quantile_analysis=True, refine_transition=True, grid_mode="progressive")`, `InteriorConfig(use_quantile_analysis=True)`
