@@ -192,15 +192,16 @@ def test_histogram_tolerance_overlays_combined_accepts_external_ax():
 
 
 def test_parameter_overview_smoke():
-    """X3: 5x3 overview renders for all interior_result paths.
+    """X3: 6x3 overview renders for all interior_result paths.
 
-    Axes count after the Y1 ECDF colorbar addition:
-    - 14 grid panels: merged top spans 2 cells (1 axes), interior z-hist
-      (1), 3 linear-mass cells, 3 log-mass cells, 3 ECDF/spacing cells,
+    Axes count:
+    - 15 grid panels: row-1 raw-vs-cut spans 3 cells (1 axes), row-2
+      merged top spans 2 cells (1 axes), row-2 interior z-hist (1),
+      3 linear-mass cells, 3 log-mass cells, 3 ECDF/spacing cells,
       3 elbow cells.
-    - 7 colorbars: merged top panel, linear lower mass, linear upper mass,
+    - 7 colorbars: row-2 merged, linear lower mass, linear upper mass,
       log lower mass, log upper mass, ECDF lower, ECDF upper.
-    Total: 21 axes. Stable across all interior_result paths since
+    Total: 22 axes. Stable across all interior_result paths since
     placeholder text still occupies the cell.
     """
     rng = np.random.default_rng(3)
@@ -222,8 +223,8 @@ def test_parameter_overview_smoke():
         config=PlotConfig(),
         tp_fn_status="lower: TP | upper: TP",
     )
-    assert len(fig_mock_interior.axes) == 21
-    assert tuple(fig_mock_interior.get_size_inches()) == (16.0, 28.0)
+    assert len(fig_mock_interior.axes) == 22
+    assert tuple(fig_mock_interior.get_size_inches()) == (16.0, 34.0)
     plt.close(fig_mock_interior)
 
     fig_none = plot_parameter_overview(
@@ -236,7 +237,7 @@ def test_parameter_overview_smoke():
         boundary_result=br,
         config=PlotConfig(),
     )
-    assert len(fig_none.axes) == 21
+    assert len(fig_none.axes) == 22
     plt.close(fig_none)
 
     # Interior with quantile_elbows populated - same count.
@@ -265,5 +266,34 @@ def test_parameter_overview_smoke():
         boundary_result=br_with_elbows,
         config=PlotConfig(),
     )
-    assert len(fig_full.axes) == 21
+    assert len(fig_full.axes) == 22
     plt.close(fig_full)
+
+
+def test_parameter_overview_log_x_for_wide_range():
+    """Row-1 auto-detects log-x when L > 0 and U/L > 100.
+
+    np1/np2 have bounds (0.01, 100), a 4-decade span. Row 1 should
+    render log-x; axes count (22) is unchanged from the linear-x
+    smoke test.
+    """
+    rng = np.random.default_rng(7)
+    L, U = 0.01, 100.0
+    x = 10.0 ** rng.uniform(np.log10(L), np.log10(U), size=500)
+
+    br = _mock_boundary_result(t_lo_star=0.01, t_hi_star=0.01)
+    ir = _mock_interior_result()
+
+    fig = plot_parameter_overview(
+        param_name="wide_range",
+        x=x,
+        x0=None,
+        L=L,
+        U=U,
+        interior_result=ir,
+        boundary_result=br,
+        config=PlotConfig(),
+    )
+    assert fig.axes[0].get_xscale() == "log"
+    assert len(fig.axes) == 22
+    plt.close(fig)

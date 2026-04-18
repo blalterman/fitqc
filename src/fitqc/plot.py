@@ -2653,26 +2653,30 @@ def plot_parameter_overview(
     tp_fn_status: str | None = None,
     tols: np.ndarray | None = None,
 ) -> Figure:
-    """Single-page 5x3 per-parameter overview.
+    """Single-page 6x3 per-parameter overview.
 
     Layout:
-        Row 1: merged raw+sweep+filtered (spans cols 0-1) / interior z-hist
-        Row 2: lower boundary mass (linear) / upper boundary mass (linear)
+        Row 1: raw (gray) vs. post-cut (contrast) histogram (spans all 3 cols)
+        Row 2: merged raw+sweep+filtered (spans cols 0-1) / interior z-hist
+        Row 3: lower boundary mass (linear) / upper boundary mass (linear)
                / interior mass (linear)
-        Row 3: lower boundary mass (log y) / upper boundary mass (log y)
+        Row 4: lower boundary mass (log y) / upper boundary mass (log y)
                / interior mass (log y)
-        Row 4: ECDF lower / ECDF upper / quantile spacing
-        Row 5: lower boundary elbows / upper boundary elbows
+        Row 5: ECDF lower / ECDF upper / quantile spacing
+        Row 6: lower boundary elbows / upper boundary elbows
                / interior elbows
 
-    Rows 2, 3, and 5 mirror each other on a "lower / upper / interior"
-    column discipline. Rows 2 and 3 show the same mass data at linear
+    Row 1 is a minimal before/after summary: gray = all raw samples,
+    contrast = samples kept after the detection-driven cuts.
+
+    Rows 3, 4, and 6 mirror each other on a "lower / upper / interior"
+    column discipline. Rows 3 and 4 show the same mass data at linear
     and log y-scales so the viewer can check both absolute magnitude
     and small-tail structure (matching the standalone
     *_boundary_diagnostics.png which also shows linear + log
     magnitude).
 
-    The top-left merged panel folds three visualizations (tolerance sweep
+    The row 2 merged panel folds three visualizations (tolerance sweep
     in full color, pipeline-filtered as gray overlay, cut markers as
     vertical lines) with a colorbar. Each mass-curve and elbow panel
     matches the corresponding standalone figure's content so the overview
@@ -2699,9 +2703,10 @@ def plot_parameter_overview(
             0.01, 0.02, 0.03, 0.05]``.
 
     Returns:
-        Figure sized 16x28. Axes count = 14 grid panels (merged top spans
-        two cells = 1 axes) + 5 colorbars (merged top plus linear and
-        log versions of lower / upper mass) = 19.
+        Figure sized 16x34. Axes count = 15 grid panels (row-1 summary
+        spans 3 cells = 1 axes; row-2 merged spans 2 cells = 1 axes) +
+        7 colorbars (merged top, linear lower/upper mass, log lower/upper
+        mass, ECDF lower, ECDF upper) = 22.
     """
     if config is None:
         config = PlotConfig()
@@ -2713,7 +2718,7 @@ def plot_parameter_overview(
         )
 
     x_clean = x[np.isfinite(x)]
-    n_total = int(len(x_clean))
+    n_total = len(x_clean)
 
     keep = np.ones(n_total, dtype=bool)
     if (
@@ -2735,13 +2740,65 @@ def plot_parameter_overview(
 
     cmap = plt.get_cmap(config.cmap)
 
-    fig = plt.figure(figsize=(16, 28), dpi=config.dpi)
-    gs = fig.add_gridspec(5, 3, hspace=0.55, wspace=0.35)
+    fig = plt.figure(figsize=(16, 34), dpi=config.dpi)
+    gs = fig.add_gridspec(6, 3, hspace=0.55, wspace=0.35)
 
-    # Row 1: merged top panel spans cols 0-1; interior z-hist in col 2.
-    ax_r1c01 = fig.add_subplot(gs[0, 0:2])
+    # Row 1: raw (gray) vs. post-cut (contrast) histogram, spanning full width.
+    ax_r1 = fig.add_subplot(gs[0, :])
+    if n_total > 0:
+        # Log-x when L > 0 and range spans >2 decades; compute FD/Doane in the
+        # relevant (linear or log10) domain and emit matching edge spacing.
+        use_log_x = L > 0 and U / L > 100
+        if use_log_x:
+            x_for_bins = np.log10(x_clean[x_clean > 0])
+            lo_bins, hi_bins = np.log10(L), np.log10(U)
+        else:
+            x_for_bins = x_clean
+            lo_bins, hi_bins = L, U
+        fd_edges = np.histogram_bin_edges(x_for_bins, bins="fd")
+        doane_edges = np.histogram_bin_edges(x_for_bins, bins="doane")
+        fd_width = fd_edges[1] - fd_edges[0] if len(fd_edges) > 1 else (hi_bins - lo_bins) / 100
+        doane_width = (
+            doane_edges[1] - doane_edges[0] if len(doane_edges) > 1 else (hi_bins - lo_bins) / 100
+        )
+        chosen_width = min(fd_width, doane_width)
+        # Floor 500 preserves narrow-pileup visibility; ceiling 2000 bounds render cost.
+        r1_nbins = max(500, min(int(np.ceil((hi_bins - lo_bins) / chosen_width)), 2000))
+        r1_edges = (
+            np.logspace(lo_bins, hi_bins, r1_nbins + 1)
+            if use_log_x
+            else np.linspace(L, U, r1_nbins + 1)
+        )
+        ax_r1.hist(
+            x_clean,
+            bins=r1_edges,
+            color="lightgray",
+            edgecolor="gray",
+            linewidth=0.3,
+            label=f"Raw (n={n_total:,})",
+        )
+        ax_r1.hist(
+            x_filtered,
+            bins=r1_edges,
+            color="C3",
+            alpha=0.6,
+            label=f"Kept (n={n_kept:,})",
+        )
+        ax_r1.set_xlim(L, U)
+        if use_log_x:
+            ax_r1.set_xscale("log")
+        ax_r1.set_yscale("log")
+        ax_r1.set_xlabel(param_name)
+        ax_r1.set_ylabel("count")
+        ax_r1.set_title("Raw vs. post-cut distribution")
+        ax_r1.legend(loc="best")
+    else:
+        ax_r1.axis("off")
+
+    # Row 2: merged top panel spans cols 0-1; interior z-hist in col 2.
+    ax_r2c01 = fig.add_subplot(gs[1, 0:2])
     _overview_merged_hist(
-        ax_r1c01,
+        ax_r2c01,
         x_clean,
         x_filtered,
         n_total,
@@ -2755,18 +2812,18 @@ def plot_parameter_overview(
         config,
     )
 
-    ax_r1c2 = fig.add_subplot(gs[0, 2])
+    ax_r2c2 = fig.add_subplot(gs[1, 2])
     if interior_result is not None:
-        _overview_interior_zhist(ax_r1c2, interior_result)
+        _overview_interior_zhist(ax_r2c2, interior_result)
     else:
-        ax_r1c2.axis("off")
-        ax_r1c2.text(
+        ax_r2c2.axis("off")
+        ax_r2c2.text(
             0.5,
             0.5,
             "No interior result",
             ha="center",
             va="center",
-            transform=ax_r1c2.transAxes,
+            transform=ax_r2c2.transAxes,
             fontsize=11,
         )
 
@@ -2785,50 +2842,50 @@ def plot_parameter_overview(
                 fontsize=11,
             )
 
-    # Row 2: mass curves (linear y) - lower boundary, upper boundary, interior.
-    ax_r2c1 = fig.add_subplot(gs[1, 0])
-    _overview_boundary_mass_side(ax_r2c1, boundary_result, "lower", config, yscale="linear")
-
-    ax_r2c2 = fig.add_subplot(gs[1, 1])
-    _overview_boundary_mass_side(ax_r2c2, boundary_result, "upper", config, yscale="linear")
-
-    ax_r2c3 = fig.add_subplot(gs[1, 2])
-    _interior_mass_or_placeholder(ax_r2c3, "linear")
-
-    # Row 3: mass curves (log y) - same columns as row 2.
+    # Row 3: mass curves (linear y) - lower boundary, upper boundary, interior.
     ax_r3c1 = fig.add_subplot(gs[2, 0])
-    _overview_boundary_mass_side(ax_r3c1, boundary_result, "lower", config, yscale="log")
+    _overview_boundary_mass_side(ax_r3c1, boundary_result, "lower", config, yscale="linear")
 
     ax_r3c2 = fig.add_subplot(gs[2, 1])
-    _overview_boundary_mass_side(ax_r3c2, boundary_result, "upper", config, yscale="log")
+    _overview_boundary_mass_side(ax_r3c2, boundary_result, "upper", config, yscale="linear")
 
     ax_r3c3 = fig.add_subplot(gs[2, 2])
-    _interior_mass_or_placeholder(ax_r3c3, "log")
+    _interior_mass_or_placeholder(ax_r3c3, "linear")
 
-    # Row 4: ECDF lower, ECDF upper, quantile spacing.
+    # Row 4: mass curves (log y) - same columns as row 3.
     ax_r4c1 = fig.add_subplot(gs[3, 0])
+    _overview_boundary_mass_side(ax_r4c1, boundary_result, "lower", config, yscale="log")
+
     ax_r4c2 = fig.add_subplot(gs[3, 1])
-    if U > L:
-        u_values = (x_clean - L) / (U - L)
-        _overview_ecdf_side(ax_r4c1, u_values, "lower", tols, boundary_result.t_lo_star, cmap)
-        _overview_ecdf_side(ax_r4c2, u_values, "upper", tols, boundary_result.t_hi_star, cmap)
+    _overview_boundary_mass_side(ax_r4c2, boundary_result, "upper", config, yscale="log")
 
     ax_r4c3 = fig.add_subplot(gs[3, 2])
-    if n_total > 0:
-        x_sorted = np.sort(x_clean)
-        _overview_spacing(ax_r4c3, x_sorted, L, U, tols, cmap)
-    else:
-        ax_r4c3.axis("off")
+    _interior_mass_or_placeholder(ax_r4c3, "log")
 
-    # Row 5: elbows - lower boundary, upper boundary, interior.
+    # Row 5: ECDF lower, ECDF upper, quantile spacing.
     ax_r5c1 = fig.add_subplot(gs[4, 0])
-    _overview_boundary_elbow_side(ax_r5c1, boundary_result, "lower")
-
     ax_r5c2 = fig.add_subplot(gs[4, 1])
-    _overview_boundary_elbow_side(ax_r5c2, boundary_result, "upper")
+    if U > L:
+        u_values = (x_clean - L) / (U - L)
+        _overview_ecdf_side(ax_r5c1, u_values, "lower", tols, boundary_result.t_lo_star, cmap)
+        _overview_ecdf_side(ax_r5c2, u_values, "upper", tols, boundary_result.t_hi_star, cmap)
 
     ax_r5c3 = fig.add_subplot(gs[4, 2])
-    _overview_interior_elbows_panel(ax_r5c3, interior_result)
+    if n_total > 0:
+        x_sorted = np.sort(x_clean)
+        _overview_spacing(ax_r5c3, x_sorted, L, U, tols, cmap)
+    else:
+        ax_r5c3.axis("off")
+
+    # Row 6: elbows - lower boundary, upper boundary, interior.
+    ax_r6c1 = fig.add_subplot(gs[5, 0])
+    _overview_boundary_elbow_side(ax_r6c1, boundary_result, "lower")
+
+    ax_r6c2 = fig.add_subplot(gs[5, 1])
+    _overview_boundary_elbow_side(ax_r6c2, boundary_result, "upper")
+
+    ax_r6c3 = fig.add_subplot(gs[5, 2])
+    _overview_interior_elbows_panel(ax_r6c3, interior_result)
 
     x0_str = f"{x0:.3g}" if x0 is not None else "None"
     title_parts = [f"{param_name}", f"L={L:.3g}", f"U={U:.3g}", f"x0={x0_str}"]
