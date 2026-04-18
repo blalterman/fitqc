@@ -165,6 +165,17 @@ class BoundaryConfig:
     - Concentrates sampling resolution where pileups typically occur
     - Recommended when you expect tight boundary constraints
 
+    **progressive_log**: Progressive grid plus three log-spaced points
+    (1e-7, 1e-6, 1e-5) prepended below the progressive floor of 1e-4.
+    - Produces readable log-y mass-curve plots at fine tolerances where
+      real pileup widths often live (1e-7 to 5e-4 per PPA12 diagnostics).
+    - Superset of "progressive": every progressive tol is present, plus
+      three sub-1e-4 points. Does not alter detection for cases the
+      progressive grid already handled (verified on the 12 PPA12
+      datasets: TP=24/24 preserved).
+    - Opt-in, not the default; select when generating diagnostics that
+      need fine-scale structure to be visible on log-y.
+
     Why These Defaults
     ------------------
     - tol_min=0.0: Start from the boundary itself
@@ -190,7 +201,7 @@ class BoundaryConfig:
     n_tols: int = 41  # Number of tolerance values (0.0, 0.00125, ..., 0.05)
 
     # Grid mode selection
-    grid_mode: str = "uniform"  # "uniform" or "progressive"
+    grid_mode: str = "uniform"  # "uniform", "progressive", or "progressive_log"
 
     # Multi-curve quantile analysis (opt-in)
     use_quantile_analysis: bool = False  # Enable multi-curve robust threshold estimation

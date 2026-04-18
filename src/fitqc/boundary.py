@@ -95,9 +95,11 @@ logger = logging.getLogger(__name__)
 def _build_tolerance_grid(config: BoundaryConfig) -> NDArray[np.floating]:
     """Build tolerance grid for boundary detection.
 
-    Supports both uniform and progressive grid modes. Progressive mode concentrates
-    resolution near the boundary (where tight pileups occur) and uses coarser
-    spacing farther out.
+    Supports uniform, progressive, and progressive_log grid modes.
+    Progressive mode concentrates resolution near the boundary (where
+    tight pileups occur) and uses coarser spacing farther out. The
+    progressive_log variant adds log-spaced points below the progressive
+    floor so log-y mass-curve plots resolve fine-scale structure.
 
     Args:
         config: BoundaryConfig specifying grid mode and parameters.
@@ -124,14 +126,14 @@ def _build_tolerance_grid(config: BoundaryConfig) -> NDArray[np.floating]:
     """
     if config.grid_mode == "uniform":
         return np.linspace(config.tol_min, config.tol_max, config.n_tols)
-    elif config.grid_mode == "progressive":
-        # Progressive grid: denser near 0, coarser farther out
-        # Breakpoints based on empirical pileup distributions
-        # Most stickiness is in [0, 0.001] (0-0.1% of range)
-        # Some stickiness extends to [0.001, 0.005] (0.1-0.5%)
-        # Broad pileups can reach [0.005, 0.02] (0.5-2%)
-        # Beyond 0.02 (2%) is rarely stickiness
-        return np.concatenate(
+    elif config.grid_mode in ("progressive", "progressive_log"):
+        # Progressive grid: denser near 0, coarser farther out.
+        # Breakpoints based on empirical pileup distributions:
+        #   Most stickiness is in [0, 0.001] (0-0.1% of range)
+        #   Some stickiness extends to [0.001, 0.005] (0.1-0.5%)
+        #   Broad pileups can reach [0.005, 0.02] (0.5-2%)
+        #   Beyond 0.02 (2%) is rarely stickiness.
+        progressive = np.concatenate(
             [
                 np.linspace(0.0000, 0.0010, 11),  # [0, 0.1%]:   11 points, 0.01% spacing
                 np.linspace(0.0010, 0.0050, 17)[1:],  # [0.1%, 0.5%]: 16 points, 0.025% spacing
@@ -139,9 +141,18 @@ def _build_tolerance_grid(config: BoundaryConfig) -> NDArray[np.floating]:
                 np.linspace(0.0200, 0.0500, 7)[1:],  # [2%, 5%]:      6 points, 0.75% spacing
             ]
         )
+        if config.grid_mode == "progressive":
+            return progressive
+        # progressive_log: prepend three log-spaced points (1e-7, 1e-6,
+        # 1e-5) so mass curves show visible structure on log-y at fine
+        # tolerances. PPA12 true pileup widths span 1e-7..5e-4
+        # (dispatches/boundary-fn-diagnostics-2026-04-17.md).
+        log_prefix = np.array([1e-7, 1e-6, 1e-5])
+        return np.concatenate([log_prefix, progressive])
     else:
         raise ValueError(
-            f"Unknown grid_mode: {config.grid_mode}. Must be 'uniform' or 'progressive'."
+            f"Unknown grid_mode: {config.grid_mode}. "
+            "Must be 'uniform', 'progressive', or 'progressive_log'."
         )
 
 
