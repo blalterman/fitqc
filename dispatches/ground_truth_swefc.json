@@ -4,7 +4,7 @@
     "source": "dispatches/ground_truth_validation.csv (numerical L/U/x0) + user 2026-04-17 full-dataset visual inspection (boolean features)",
     "dataset": "swefc.h5",
     "hdf5_key": "ppa12_apeq",
-    "notes": "Numerical bounds (L, U, x0) copied from CSV. Boolean feature presence (lower/upper/interior) follows the 2026-04-17 bullet list; several CSV interior=0 entries have been corrected to interior=true here per the user's firmed-up assessment (see per-parameter csv_interior_divergence flags)."
+    "notes": "Numerical bounds (L, U, x0) copied from CSV. Boolean feature presence (lower/upper/interior) follows the 2026-04-17 bullet list; several CSV interior=0 entries have been corrected to interior=true here per the user's firmed-up assessment (see per-parameter csv_interior_divergence flags). Schema: `x0` is the optimizer's initial-guess value (pipeline fact from the CSV); `interior_locations` is the empirical list of x-values where visual inspection observes a spike. They usually coincide, but the pipeline x0 may not be where the spike actually forms — see `e.w.a` (x0=0 with spikes at 0 and -25) and `ab.a` (x0=0 but the interior spike is at x=1 while x=0 is lower-boundary stickiness overlapping L=0). The harness uses `interior_locations` for detection; `x0` is carried as metadata."
   },
   "parameters": [
     {
@@ -170,10 +170,10 @@
       "lower": true,
       "upper": true,
       "interior": true,
-      "interior_locations": [0],
+      "interior_locations": [1],
       "below_lower_cut": false,
       "csv_interior_divergence": true,
-      "note": "A_He. L and x0 coincide at 0 — boundary and interior stickiness overlap. Internal sticky point to be estimated from ab.a [0, 2.5] zoom plot."
+      "note": "A_He. Optimizer x0=0 (pipeline fact) coincides with L=0, but the empirical interior spike is at x=1 — NOT at x0. The 120,712 samples at exactly x=0 are lower-boundary stickiness (covered by lower=true). Interior spike at x=1 is ~3.2K excess over ~14.7K baseline per ab_a_interior_zoom.pdf 2026-04-18 — a ~22% bump, weaker than current detector tuning. Upper shelf at U=25 (32,459 samples at x=25)."
     }
   ]
 }
