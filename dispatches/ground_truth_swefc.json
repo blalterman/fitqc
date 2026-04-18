@@ -89,7 +89,7 @@
       "interior_locations": [],
       "below_lower_cut": true,
       "csv_interior_divergence": false,
-      "note": "Bullet list: samples below lower boundary must be cut. CSV does not encode this flag. Operational meaning (how the mask treats below-L samples) needs user confirmation before harness wires it up."
+      "note": "Samples with n_param.p2 < 0.01 fall below the lower bound the generating pipeline specified; they are noise artifacts and must be hard-cut by the mask."
     },
     {
       "parameter": "e.w.p1",
