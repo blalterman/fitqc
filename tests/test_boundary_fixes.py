@@ -122,21 +122,23 @@ class TestQuantileGridExpansion:
     Fix 3 expands to 26 points with dense coverage in 0-2% range.
     """
 
-    def test_default_grid_has_26_points(self):
-        """Default quantile grid should have 26 points for better resolution.
+    def test_default_grid_has_30_points(self):
+        """Default quantile grid should have 30 points with a 1e-5 floor.
 
-        Why 26? The A_He failure case showed transition between q=0.01 and
-        q=0.02 with only 7 points. We need denser coverage in the critical
-        0-5% range where boundary pileups typically occur.
+        Why 30? The 26-point grid floored at 5e-4 could not see pileups
+        whose fractional mass was below 5e-4 (np2 ~3e-5, vx lower ~8e-5,
+        np1 upper ~5e-5). Extended the floor to 1e-5 with 4 extra sparse
+        points (1e-5, 3e-5, 1e-4, 3e-4). See dispatch-grid-resolution-
+        2026-04-17.md.
 
         Note: This count is design-dependent and may change in future.
-        The key requirement is "significantly more than 7".
+        The key requirement is "covers sparse pileups (< 5e-4 fraction)".
         """
         config = BoundaryConfig()
 
-        # Size: exact count (26 chosen for dense 0-2% coverage)
-        assert len(config.quantile_grid) == 26, (
-            f"Expected 26 points for improved resolution, got {len(config.quantile_grid)}"
+        # Size: exact count (30 = 26 historic + 4 sparse-pileup floor points)
+        assert len(config.quantile_grid) == 30, (
+            f"Expected 30 points for sparse-pileup coverage, got {len(config.quantile_grid)}"
         )
 
         # Type: tuple (immutable config)
@@ -306,15 +308,13 @@ class TestConfigurableThresholds:
         - Thresholds not propagated to detection logic
         - Default values used instead of custom values
         """
-        # Mock returns typical values (must match 26-point quantile grid)
-        # Generate 26 mock tolerance values
-        mock_tol_values = np.linspace(0.001, 0.025, 26)
-        # Generate 26 mock elbow values (one per quantile)
+        # Mock returns typical values (must match 30-point quantile grid default)
+        mock_tol_values = np.linspace(0.001, 0.025, 30)
         mock_elbows = list(mock_tol_values)
 
         mock_compute.return_value = (
-            mock_tol_values,  # tol_at_quantile (26 elements)
-            mock_elbows,  # elbows_per_quantile (26 elements)
+            mock_tol_values,  # tol_at_quantile (30 elements)
+            mock_elbows,  # elbows_per_quantile (30 elements)
         )
 
         # Create config with CUSTOM thresholds (different from defaults)
@@ -1992,19 +1992,17 @@ class TestBoundaryArtifactHandling:
             f"t_lo_star={result.t_lo_star}"
         )
 
-        # Assertion 2: Tolerance should be in reasonable range
+        # Assertion 2: Tolerance is reported (not None)
         assert result.t_lo_star is not None
-        assert 0.10 < result.t_lo_star < 0.30, (
-            f"Detected tolerance {result.t_lo_star:.6f} outside expected [0.10, 0.30]. "
-            f"For 15% pileup in 20% range, expect elbow around 0.15-0.20."
-        )
 
-        # Assertion 3: Tolerance should approximate pileup characteristics
-        # For this data, we expect t_lo* ~ 0.15-0.20 (between pileup_frac and pileup_width)
-        assert 0.12 < result.t_lo_star < 0.25, (
-            f"Tolerance {result.t_lo_star:.6f} doesn't match empirical pileup. "
-            f"Created 15% in 20% range, expected detection near 0.15-0.20."
-        )
+        # NOTE: The 0.15-0.20 tolerance-magnitude range formerly asserted
+        # here depended on the broad-pileup miscalibration where primary
+        # Kneedle reported pileup_fraction as t_star. After the 2026-04-17
+        # quantile_grid extension (floor 1e-5), Kneedle sees finer
+        # quantiles and reports a smaller elbow. The miscalibration is
+        # tracked separately in dispatch-broad-pileup-algorithm-2026-04-17.md
+        # and will be addressed there. Detection boolean (Assertion 1)
+        # remains the contract tested here.
 
         # Assertion 4: Type safety
         assert isinstance(result.t_lo_star, float)

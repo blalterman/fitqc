@@ -172,7 +172,9 @@ class BoundaryConfig:
     - n_tols=41: Gives 0.125% resolution in tolerance
     - grid_mode="uniform": Works well for most cases
     - use_quantile_analysis=False: Opt-in for multi-curve analysis
-    - quantile_grid: Standard quantiles from 0.1% to 10%
+    - quantile_grid: Quantiles from 1e-5 up to 0.25. The 1e-5 floor lets
+      Kneedle see pileups whose fractional mass is below 5e-4 (np2, vx
+      lower, np1 upper). See dispatch-grid-resolution-2026-04-17.md.
     - min_quantile_agreement=0.5: At least half the quantiles must agree
 
     Interpreting Results
@@ -194,7 +196,16 @@ class BoundaryConfig:
     use_quantile_analysis: bool = False  # Enable multi-curve robust threshold estimation
     quantile_grid: tuple[float, ...] = field(
         default_factory=lambda: (
-            # 0-1%: Very tight pileups (precision artifacts)
+            # 1e-5 .. 5e-4: Sparse pileups below prior floor.
+            # Needed so Kneedle can see pileups whose fractional mass is
+            # below 5e-4 (e.g. np2 ~3e-5, vx lower ~8e-5, np1 ~5e-5).
+            # Without these, tol_at_quantile[0] == tol_grid[0] for sparse
+            # pileups and Kneedle misses the transition entirely.
+            1e-5,
+            3e-5,
+            1e-4,
+            3e-4,
+            # 5e-4 .. 1% of range: Very tight pileups (precision artifacts)
             0.0005,
             0.001,
             0.0015,
@@ -225,7 +236,7 @@ class BoundaryConfig:
             0.20,
             0.25,
         )
-    )  # Quantiles to analyze for threshold detection (26 points for better resolution)
+    )  # Quantiles for threshold detection (30 points; extends below 5e-4 for sparse pileups)
     min_quantile_agreement: float = 0.5  # Minimum fraction of quantiles that must agree
 
     # Detection thresholds (Fix 4: Make these configurable)
