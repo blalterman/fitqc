@@ -111,6 +111,8 @@ class InteriorConfig:
 
     # Epsilon grid for scanning (in log10 space)
     eps_log10_min: float = -12  # ~ULP for float64, ensures we catch precision-limited cases
+    # e_w_p2 exhibits an upstream float32-precision artifact at eps ~ 1e-8;
+    # see dispatches/e-w-p2-precision-note-2026-04-17.md.
     eps_log10_max: float = -3  # 0.1% of normalized range
     n_eps: int = 50  # Number of epsilon values to test
 
