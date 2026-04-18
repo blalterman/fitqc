@@ -62,7 +62,7 @@ PARAMS = [
 boundary_config = BoundaryConfig(
     use_quantile_analysis=True,
     refine_transition=True,
-    grid_mode="progressive",
+    grid_mode="progressive_log",
 )
 plot_config = PlotConfig()
 tols = np.array([0.0, 0.005, 0.01, 0.02, 0.03, 0.05])
