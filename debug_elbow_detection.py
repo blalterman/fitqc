@@ -1,94 +1,104 @@
-#!/usr/bin/env python
-"""Debug elbow detection for A_He data."""
-
-import json
+"""Debug elbow detection in quantile curve."""
 
 import numpy as np
-import pyarrow.parquet as pq
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+from fitqc.boundary import compute_u, tail_mass
+from fitqc.selection import select_elbow
 
-from fitqc.boundary import _compute_quantile_curves_boundary, compute_u, tail_mass
+# Replicate test case
+rng = np.random.default_rng(42)
+x_pileup = rng.uniform(0.0, 0.003, size=300)  # 3% tight pileup
+x_bulk = rng.uniform(0.0, 1.0, size=9700)  # 97% uniform
+x = np.concatenate([x_pileup, x_bulk])
 
-# Load A_He data
-with open("tests/data/A_He_test_metadata.json") as f:
-    metadata = json.load(f)
-
-table = pq.read_table("tests/data/A_He_test_sample.parquet")
-x = table["values"].to_numpy()
-L, U = metadata["L"], metadata["U"]
-
-# Compute u and sort
+# Compute u values
+L, U = 0.0, 1.0
 u = compute_u(x, L, U)
 u_sorted = np.sort(u)
 
-# Setup grids (same as default config)
-tol_grid = np.linspace(0, 0.05, 501)
-quantile_grid = np.linspace(0.0005, 0.25, 50)
+# Create tolerance grid (simple version for debugging)
+tol_max = 0.05
+n_tols = 45
+tol_grid = np.linspace(0, tol_max, n_tols)
+
+# Quantile grid from test
+quantile_grid = np.array([0.005, 0.01, 0.02, 0.03, 0.05, 0.10])
+
+# Compute mass curve
+mass_curve = np.array([tail_mass(u_sorted, tol) for tol in tol_grid])
+
+# For each quantile, find tolerance where mass = quantile
+tol_at_quantile = np.interp(quantile_grid, mass_curve, tol_grid)
 
 print("=" * 80)
-print("Debugging Elbow Detection for A_He Data")
-print("=" * 80)
-print("\nData characteristics:")
-print(f"  N samples: {len(x):,}")
-print(f"  Exactly at L=0: {np.sum(x == 0):,} ({100 * np.sum(x == 0) / len(x):.3f}%)")
-print(f"  u_min: {u_sorted[0]:.15f}")
-print(f"  u_max: {u_sorted[-1]:.15f}")
-
-print(f"\n{'=' * 80}")
-print("Quantile Curve Computation")
+print("ELBOW DETECTION DEBUG")
 print("=" * 80)
 
-# Compute quantile curves
-tol_at_quantile, elbows = _compute_quantile_curves_boundary(u_sorted, tol_grid, quantile_grid)
+print(f"\nQuantile grid: {quantile_grid}")
+print(f"Tolerance at each quantile: {tol_at_quantile}")
 
-print(f"\nElbow detected: {elbows[0]}")
-print(f"Type of elbow: {type(elbows[0])}")
+print(f"\nData for elbow detection:")
+print(f"  X-axis (quantile): {quantile_grid}")
+print(f"  Y-axis (tolerance): {tol_at_quantile}")
 
-# Show first 10 (quantile, tolerance) pairs
-print("\nFirst 10 (quantile, tolerance) pairs:")
-print(f"{'Index':<7} {'Quantile':<12} {'Tolerance':<12} {'Ratio (tol/q)':<15}")
-print("-" * 60)
-for i in range(min(10, len(quantile_grid))):
-    q = quantile_grid[i]
-    t = tol_at_quantile[i]
-    ratio = t / q if q > 0 else np.inf
-    marker = " <-- ELBOW" if elbows[0] is not None and abs(q - elbows[0]) < 1e-10 else ""
-    print(f"{i:<7} {q:<12.6f} {t:<12.6f} {ratio:<15.2f}{marker}")
+# Plot the curve
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.plot(quantile_grid, tol_at_quantile, 'o-', label='Quantile → Tolerance')
+ax.axline((0, 0), slope=1, color='red', linestyle='--', alpha=0.5, label='Uniform (y=x)')
+ax.set_xlabel('Quantile (fraction of samples)')
+ax.set_ylabel('Tolerance (fraction of range)')
+ax.set_title('Quantile vs Tolerance Curve (Pileup Detection)')
+ax.legend()
+ax.grid(True, alpha=0.3)
+fig.savefig('/home/user/fitqc/debug_quantile_curve.png', dpi=150, bbox_inches='tight')
+print(f"\nSaved plot to debug_quantile_curve.png")
 
-print(f"\n{'=' * 80}")
-print("Understanding the Elbow Value")
-print("=" * 80)
+# Detect elbow (convex, increasing)
+print(f"\nAttempting elbow detection with select_elbow:")
+print(f"  - curve='convex'")
+print(f"  - direction='increasing'")
 
-if elbows[0] is not None:
-    print(f"\nDetected elbow value: {elbows[0]:.6f}")
-    print(f"tol_grid range: [{tol_grid[0]:.6f}, {tol_grid[-1]:.6f}]")
-    print(f"quantile_grid range: [{quantile_grid[0]:.6f}, {quantile_grid[-1]:.6f}]")
-    print(
-        f"\nIs elbow in quantile_grid range? {quantile_grid[0] <= elbows[0] <= quantile_grid[-1]}"
-    )
-    print(f"Is elbow in tol_grid range? {tol_grid[0] <= elbows[0] <= tol_grid[-1]}")
+elbow_quantile = select_elbow(
+    quantile_grid, tol_at_quantile, curve="convex", direction="increasing"
+)
 
-    # Find where this elbow value appears
-    if quantile_grid[0] <= elbows[0] <= quantile_grid[-1]:
-        print("\n=> Elbow appears to be a QUANTILE value")
-        # Find corresponding tolerance
-        idx = np.argmin(np.abs(quantile_grid - elbows[0]))
-        print(f"   At quantile={quantile_grid[idx]:.6f}, tolerance={tol_at_quantile[idx]:.6f}")
-    elif tol_grid[0] <= elbows[0] <= tol_grid[-1]:
-        print("\n=> Elbow appears to be a TOLERANCE value")
+print(f"\nDetected elbow:")
+print(f"  - elbow_quantile (x-coordinate): {elbow_quantile}")
 
-print(f"\n{'=' * 80}")
-print("Mass Curve Analysis")
-print("=" * 80)
+if elbow_quantile is not None:
+    # Convert to tolerance space
+    elbow_tol = np.interp(elbow_quantile, quantile_grid, tol_at_quantile)
+    print(f"  - elbow_tol (y-coordinate): {elbow_tol}")
 
-# Compute mass at different tolerances
-mass_curve = np.array([tail_mass(u_sorted, t) for t in tol_grid])
+    # Find where this is on the curve
+    idx = np.where(np.isclose(quantile_grid, elbow_quantile))[0]
+    if len(idx) > 0:
+        print(f"  - Elbow is at quantile_grid[{idx[0]}] = {quantile_grid[idx[0]]}")
+        print(f"  - Corresponding tol_at_quantile[{idx[0]}] = {tol_at_quantile[idx[0]]}")
 
-print("\nFirst 10 tolerance values and corresponding mass:")
-print(f"{'Tolerance':<12} {'Mass P(u<tol)':<15} {'Expected (uniform)':<20} {'Excess'}")
-print("-" * 70)
-for i in range(min(10, len(tol_grid))):
-    t = tol_grid[i]
-    m = mass_curve[i]
-    expected = t  # For uniform distribution
-    excess = m / t if t > 0 else np.inf
-    print(f"{t:<12.6f} {m:<15.6f} {expected:<20.6f} {excess:>6.1f}x")
+    print(f"\n  Interpretation:")
+    print(f"    The algorithm detected an elbow at quantile={elbow_quantile:.4f},")
+    print(f"    which corresponds to tolerance={elbow_tol:.6f}.")
+    print(f"    This means {elbow_quantile*100:.2f}% of samples are within")
+    print(f"    {elbow_tol*100:.4f}% of the boundary.")
+else:
+    print(f"  - No elbow detected (returned None)")
+    elbow_tol = None
+
+# Show what we expect
+print(f"\nExpected behavior:")
+print(f"  - Pileup width: 0.003 (0.3% of range)")
+print(f"  - Pileup fraction: 300/10000 = 3%")
+print(f"  - Expected elbow around: quantile=0.03, tolerance=0.003")
+print(f"  - Actual elbow: quantile={elbow_quantile}, tolerance={elbow_tol if elbow_quantile else 'None'}")
+
+# Check if we're using the first grid point after 0
+if elbow_tol is not None and elbow_tol < 0.001:
+    print(f"\n⚠️  WARNING: Detected tolerance ({elbow_tol:.6f}) is very small!")
+    print(f"   This is {elbow_tol/0.003*100:.1f}% of the true pileup width.")
+    print(f"   Possible issues:")
+    print(f"   1. Elbow detection is too sensitive (detects early transition)")
+    print(f"   2. Quantile curve shape not well-suited for elbow detection")
+    print(f"   3. Need different curve type or parameters")
