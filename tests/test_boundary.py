@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from fitqc.boundary import compute_u, run_boundary_qc
+from fitqc.boundary import _check_excess_mass_subgrid, compute_u, run_boundary_qc
 from fitqc.config import BoundaryConfig
 
 
@@ -388,3 +388,57 @@ class TestBoundaryQC:
         assert result.upper_pileup_detected is True
         assert result.t_hi_star is not None
         assert result.t_hi_star > 0.003
+
+
+class TestSubgridFallback:
+    """Sub-grid excess-mass fallback for delta-function pileups."""
+
+    def test_detects_thin_delta_pileup_below_quantile_grid_floor(self):
+        """A 0.05% delta pileup at u=0 (well below quantile_grid floor 0.0005).
+
+        Primary path returns nothing because the elbow lies below the
+        quantile grid; the sub-grid scan must still flag detection.
+        """
+        rng = np.random.default_rng(0)
+        x_uniform = rng.uniform(0.0, 1.0, size=99950)
+        x_pileup = np.zeros(50)  # 0.05% stuck at u=0 exactly
+        x = np.concatenate([x_pileup, x_uniform])
+
+        config = BoundaryConfig(use_quantile_analysis=True, refine_transition=True)
+        result = run_boundary_qc(x, L=0.0, U=1.0, config=config)
+
+        assert result.lower_pileup_detected is True
+        assert result.t_lo_star is not None
+        assert result.t_lo_star <= 1e-3
+
+    def test_no_false_positive_on_uniform_data(self):
+        """Pure uniform random data must not trigger the fallback.
+
+        A few chance samples within a fine tolerance can satisfy the
+        excess-mass ratio in isolation; the delta-function gate (samples
+        at u=0 to within float64 precision) blocks this.
+        """
+        rng = np.random.default_rng(1)
+        x = rng.uniform(0.0, 1.0, size=100_000)
+
+        config = BoundaryConfig(use_quantile_analysis=True, refine_transition=True)
+        result = run_boundary_qc(x, L=0.0, U=1.0, config=config)
+
+        assert result.lower_pileup_detected is False
+        assert result.upper_pileup_detected is False
+
+    def test_subgrid_function_requires_samples_at_zero(self):
+        """Direct unit test: gate rejects when no sample sits at u=0."""
+        # Samples near but not at u=0
+        u = np.sort(np.array([1e-5, 1e-4, 0.5, 0.9, 0.99]))
+        det, t = _check_excess_mass_subgrid(u, (1e-7, 1e-6, 1e-5), excess_ratio=1.5)
+        assert det is False
+        assert t is None
+
+    def test_subgrid_function_detects_when_zero_present_with_excess(self):
+        """Direct unit test: gate passes when at least one sample at u=0."""
+        # 3 samples at u=0 exactly, 7 elsewhere — n=10, mass(any tol)=0.3
+        u = np.sort(np.concatenate([np.zeros(3), np.array([0.1, 0.3, 0.4, 0.5, 0.6, 0.8, 0.9])]))
+        det, t = _check_excess_mass_subgrid(u, (1e-7, 1e-6, 1e-5), excess_ratio=1.5)
+        assert det is True
+        assert t == 1e-7  # Smallest tol where 0.3 > tol*1.5

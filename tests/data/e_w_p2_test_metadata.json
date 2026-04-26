@@ -1,0 +1,21 @@
+{
+  "name": "e_w_p2",
+  "x0": 0.0,
+  "L": -75.0,
+  "U": 75.0,
+  "units": "%",
+  "n_samples": 100000,
+  "n_samples_full": 7549989,
+  "sample_seed": 42,
+  "sample_method": "uniform random without replacement",
+  "source": "/Users/balterma/observatories/wind/pipeline/swe/swefc.h5:ppa12_apeq",
+  "fitqc_test": {
+    "x0": 0.0,
+    "L": -75.0,
+    "U": 75.0,
+    "expected_lower_stickiness": true,
+    "expected_upper_stickiness": true,
+    "expected_interior_stickiness": true
+  },
+  "notes": "Beam thermal speed perturbation coefficient."
+}

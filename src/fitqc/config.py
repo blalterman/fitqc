@@ -111,6 +111,8 @@ class InteriorConfig:
 
     # Epsilon grid for scanning (in log10 space)
     eps_log10_min: float = -12  # ~ULP for float64, ensures we catch precision-limited cases
+    # e_w_p2 exhibits an upstream float32-precision artifact at eps ~ 1e-8;
+    # see dispatches/e-w-p2-precision-note-2026-04-17.md.
     eps_log10_max: float = -3  # 0.1% of normalized range
     n_eps: int = 50  # Number of epsilon values to test
 
@@ -163,6 +165,17 @@ class BoundaryConfig:
     - Concentrates sampling resolution where pileups typically occur
     - Recommended when you expect tight boundary constraints
 
+    **progressive_log**: Progressive grid plus three log-spaced points
+    (1e-7, 1e-6, 1e-5) prepended below the progressive floor of 1e-4.
+    - Produces readable log-y mass-curve plots at fine tolerances where
+      real pileup widths often live (1e-7 to 5e-4 per PPA12 diagnostics).
+    - Superset of "progressive": every progressive tol is present, plus
+      three sub-1e-4 points. Does not alter detection for cases the
+      progressive grid already handled (verified on the 12 PPA12
+      datasets: TP=24/24 preserved).
+    - Opt-in, not the default; select when generating diagnostics that
+      need fine-scale structure to be visible on log-y.
+
     Why These Defaults
     ------------------
     - tol_min=0.0: Start from the boundary itself
@@ -170,7 +183,9 @@ class BoundaryConfig:
     - n_tols=41: Gives 0.125% resolution in tolerance
     - grid_mode="uniform": Works well for most cases
     - use_quantile_analysis=False: Opt-in for multi-curve analysis
-    - quantile_grid: Standard quantiles from 0.1% to 10%
+    - quantile_grid: Quantiles from 1e-5 up to 0.25. The 1e-5 floor lets
+      Kneedle see pileups whose fractional mass is below 5e-4 (np2, vx
+      lower, np1 upper). See dispatch-grid-resolution-2026-04-17.md.
     - min_quantile_agreement=0.5: At least half the quantiles must agree
 
     Interpreting Results
@@ -186,14 +201,81 @@ class BoundaryConfig:
     n_tols: int = 41  # Number of tolerance values (0.0, 0.00125, ..., 0.05)
 
     # Grid mode selection
-    grid_mode: str = "uniform"  # "uniform" or "progressive"
+    grid_mode: str = "uniform"  # "uniform", "progressive", or "progressive_log"
 
     # Multi-curve quantile analysis (opt-in)
     use_quantile_analysis: bool = False  # Enable multi-curve robust threshold estimation
     quantile_grid: tuple[float, ...] = field(
-        default_factory=lambda: (0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.10)
-    )  # Quantiles to analyze for threshold detection
+        default_factory=lambda: (
+            # 1e-5 .. 5e-4: Sparse pileups below prior floor.
+            # Needed so Kneedle can see pileups whose fractional mass is
+            # below 5e-4 (e.g. np2 ~3e-5, vx lower ~8e-5, np1 ~5e-5).
+            # Without these, tol_at_quantile[0] == tol_grid[0] for sparse
+            # pileups and Kneedle misses the transition entirely.
+            1e-5,
+            3e-5,
+            1e-4,
+            3e-4,
+            # 5e-4 .. 1% of range: Very tight pileups (precision artifacts)
+            0.0005,
+            0.001,
+            0.0015,
+            0.002,
+            0.0025,
+            0.003,
+            0.004,
+            0.005,
+            0.007,
+            0.01,
+            # 1-2%: A_He transition zone - CRITICAL, dense coverage
+            0.011,
+            0.012,
+            0.013,
+            0.015,
+            0.017,
+            0.02,
+            # 2-5%: Moderate pileups
+            0.025,
+            0.03,
+            0.04,
+            0.05,
+            # 5-25%: Broad distribution tail
+            0.06,
+            0.08,
+            0.10,
+            0.15,
+            0.20,
+            0.25,
+        )
+    )  # Quantiles for threshold detection (30 points; extends below 5e-4 for sparse pileups)
     min_quantile_agreement: float = 0.5  # Minimum fraction of quantiles that must agree
+
+    # Detection thresholds (Fix 4: Make these configurable)
+    pileup_threshold: float = 0.005  # Minimum tolerance to consider as pileup (0.5% of range)
+    excess_ratio: float = 1.5  # Mass must be at least N times expected for uniform
+
+    # Iterative refinement (Fix 5)
+    refine_transition: bool = False  # Enable iterative Kneedle refinement
+
+    # Sub-grid excess-mass fallback tolerances. Tried in ascending order when
+    # the primary Kneedle + check_excess_mass path returns no detection. The
+    # smallest tol whose mass exceeds tol * excess_ratio is reported as t_star,
+    # so downstream filters apply the tightest cut consistent with the data.
+    subgrid_fallback_tols: tuple[float, ...] = field(
+        default_factory=lambda: (1e-7, 1e-6, 1e-5, 3e-5, 1e-4, 3e-4)
+    )
+
+    def __post_init__(self) -> None:
+        """Validate configuration parameters."""
+        # Validate pileup_threshold
+        if not (0.0 <= self.pileup_threshold <= 0.1):
+            raise ValueError(f"pileup_threshold must be in [0, 0.1], got {self.pileup_threshold}")
+
+        # Validate excess_ratio
+        if self.excess_ratio < 1.0:
+            raise ValueError(
+                f"excess_ratio must be >= 1.0 (1.0 = uniform baseline), got {self.excess_ratio}"
+            )
 
 
 @dataclass

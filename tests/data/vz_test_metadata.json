@@ -1,0 +1,21 @@
+{
+  "name": "vz",
+  "x0": 0.0,
+  "L": -200.0,
+  "U": 200.0,
+  "units": "km/s",
+  "n_samples": 100000,
+  "n_samples_full": 7549989,
+  "sample_seed": 42,
+  "sample_method": "uniform random without replacement",
+  "source": "/Users/balterma/observatories/wind/pipeline/swe/swefc.h5:ppa12_apeq",
+  "fitqc_test": {
+    "x0": 0.0,
+    "L": -200.0,
+    "U": 200.0,
+    "expected_lower_stickiness": true,
+    "expected_upper_stickiness": true,
+    "expected_interior_stickiness": true
+  },
+  "notes": "Velocity component perpendicular to ecliptic. x0=0 used as the interior reference since vz is physically centered near zero; previously null (moment-based x0) but set to 0 on 2026-04-17 to enable interior.py evaluation."
+}

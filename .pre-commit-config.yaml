@@ -1,7 +1,13 @@
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.9.7
+    rev: v0.14.13
     hooks:
       - id: ruff
         args: [--fix]
       - id: ruff-format
+      # Whole-repo format check - catches pre-existing violations
+      - id: ruff-format
+        name: ruff-format-check-all
+        args: [--check]
+        pass_filenames: false
+        always_run: true

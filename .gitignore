@@ -1,3 +1,7 @@
+swefc.h5
+*.png
+*.pdf
+
 # macOS
 .DS_Store
 
@@ -213,3 +217,5 @@ __marimo__/
 
 # Example outputs
 qc_report.json
+# Test data
+tests/data/*_full.parquet
